@@ -21,6 +21,8 @@ export type PluginTileOption = {
 };
 export type PluginTile = {
   id: string; name: Texts; icon?: string; min: string; max: string; memory: number;
+  // The whole page (wabit fork): the manifest's `sizes.full`, for a tile made to fill the glass.
+  full?: boolean;
   domains?: string[]; options?: PluginTileOption[]; example?: Texts;
   // The add-on draws a preview of it from its data (api/plugins/<id>/preview/<tile>): the manifest names one.
   preview?: boolean;

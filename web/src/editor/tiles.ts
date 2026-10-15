@@ -179,10 +179,11 @@ export function tileSizeChoices(tile: Tile): Size[] {
   }
   // A plugin's tile takes the sizes between its manifest's smallest and largest (design, docs: the plugins proposal).
   const plugin = usePluginsStore().pluginTileOf(tile.entity);
-  if (!pageTarget(tile.entity) && !plugin) choices.push("full");
+  if (!pageTarget(tile.entity) && (!plugin || plugin.tile.full)) choices.push("full");
   if (plugin) {
     const least = dimensions(plugin.tile.min as Size, grid), most = dimensions(plugin.tile.max as Size, grid);
-    return choices.filter((size) => { const d = dimensions(size, grid);
+    // A plugin tile whose manifest says `full` takes the whole page whatever its largest span (wabit fork).
+    return choices.filter((size) => { if (size === "full") return true; const d = dimensions(size, grid);
       return d.columns >= least.columns && d.rows >= least.rows && d.columns <= most.columns && d.rows <= most.rows; });
   }
   // The energy card's diagram takes a size it fits (app 0.4.77): on a small glass a page of its own, never a single cell.
