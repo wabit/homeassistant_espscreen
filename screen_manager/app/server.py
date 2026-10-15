@@ -15,6 +15,8 @@ import time
 from datetime import datetime, timedelta, timezone
 import math
 from urllib.parse import urlsplit
+import calendar_feed
+import durations
 import camera_feed
 import live_feed
 import claude_skill
@@ -22,6 +24,7 @@ import screen_hang
 import screen_labels
 import screen_saver
 import feedback
+from build_queue import BuildQueue
 from firmware import Firmware
 import ha_pairing
 import catalogue
@@ -32,6 +35,7 @@ import media_library
 import speakers
 import map_card
 import energy_flow
+import plugin_pictures
 import map_tiles
 import tile_icons
 from updates import Updater
@@ -42,7 +46,7 @@ import plugins
 from aiohttp import ClientError, ClientSession, ClientTimeout, WSMsgType, web
 from core import alarm_extras, lock_extras, ALERT_EVENT, board_of, BROADCAST_EVENTS, BROADCAST_SHOW, BUILTIN, CAMERA_DOMAINS, entity_id, SETTINGS_BESIDE_BLOCK, TILE_EVENTS, TILE_RESULT_EVENT, layout_snapshot, match_screen, HEADER_MIN_FIRMWARE, NAME_TILE_SETTINGS, TRANSPORT_MIN_FIRMWARE, alert_action, alert_camera, alert_choice, alert_data, choice_service, ALERT_CHOICE_ACTION, ALERT_CHOICE_MIN_FIRMWARE, parse_firmware, alert_reference, alert_screen_choice, alert_screen_names, alert_service, alert_targets, backgrounds, builtin_name, controls_catalogue, device_prefixes, discover, discover_screens, encode, entity_slug, extras, media_cover, media_extras, forecast_kinds, header_items, inbox_prefix, message_action, min_firmware, name_clash, packets, revision, screen_items, state_message, validate_header, validate_layout, validate_settings
 from core import ENERGY_TILE, MAP_TILE_MIN_FIRMWARE, WEATHER_WEEK, calibrate_entity, can_standby, dimmable, SETTING_ENTITIES, SETTING_RULES, STANDBY_KEYS, setting_action, setting_entities, setting_from_state, state_word
-from core import BOARD_KEYS, has_battery, is_key, drawn_controls, FAVORITE_KINDS, SCREENSAVER_MIN_FIRMWARE, short, plugin_tile
+from core import BAR_CARDS_FEATURE, BOARD_KEYS, has_battery, is_key, drawn_controls, FAVORITE_KINDS, SCREENSAVER_MIN_FIRMWARE, short, plugin_tile
 from core import (FIRMWARE_MAX_BAR_ITEMS, FIRMWARE_MAX_PAGES, FIRMWARE_MAX_TILES, Grid, page_target, PAGE_TILE_REPEAT_MIN_FIRMWARE, ENTITY_REPEAT_MIN_FIRMWARE, ROTATION_MIN_FIRMWARE, SHAPES, firmware_features, grid_of, orientation_at,
                   packed_slots, run_tile_event, screen_firmware, shape_of, turns_of, update_in_tessera, version_text)
 import header_bar
@@ -343,6 +347,30 @@ class HomeAssistant:
     def state_words(self, words):
         """One set of words for every language (tests, a Home Assistant that answers in one language only)."""
         self.words_by_language = {'*': dict(words or {})}
+
+    def display_precision(self, entity):
+        """A sensor's display precision as Home Assistant's entity settings show it (entity-registry-settings-editor.ts):
+        the one chosen there (`own`, None for Default), the one its integration suggests (`suggested`, what Default
+        means), and whether it can be chosen at all: only an entity in the registry has settings."""
+        entry = next((item for item in self.registry or [] if isinstance(item, dict) and item.get('entity_id') == entity), None)
+        options = ((entry or {}).get('options') or {}).get('sensor') or {}
+        whole = lambda value: value if type(value) is int and 0 <= value <= 6 else None
+        return {'own': whole(options.get('display_precision')), 'suggested': whole(options.get('suggested_display_precision')),
+                'editable': entry is not None}
+
+    async def set_display_precision(self, entity, precision):
+        """The display precision of a sensor, set in Home Assistant itself as its entity settings set it
+        (config/entity_registry/update with the sensor's options): every dashboard, tile and top bar follows it. None is
+        Default. The registry entry is changed here at once; Home Assistant's registry event brings the rest."""
+        # Home Assistant replaces the sensor's options as a whole, so they go back as they are with only the precision
+        # changed, as its dialog sends them (the integration's suggested precision stays).
+        entry = next((item for item in self.registry or [] if isinstance(item, dict) and item.get('entity_id') == entity), None)
+        options = {**(((entry or {}).get('options') or {}).get('sensor') or {}), 'display_precision': precision}
+        answer = await self.request('config/entity_registry/update', entity_id=entity, options_domain='sensor', options=options)
+        entry = (answer or {}).get('entity_entry') if isinstance(answer, dict) else None
+        if isinstance(entry, dict):
+            self.registry = [entry if isinstance(item, dict) and item.get('entity_id') == entity else item for item in self.registry or []]
+        return self.display_precision(entity)
 
     async def registries(self):
         self.registry, self.devices, self.areas = await asyncio.gather(
@@ -816,6 +844,15 @@ class HomeAssistant:
         forecast = ((result or {}).get('response') or {}).get(entity, {}).get('forecast', [])
         return forecast if isinstance(forecast, list) else []
 
+    async def events(self, entities, start, end):
+        """Every event of these calendars from `start` up to `end`, as Home Assistant's calendar.get_events answers
+        (repeating events already written out), by calendar: {entity: [event]}."""
+        result = await self.request('call_service', domain='calendar', service='get_events',
+                                    service_data={'start_date_time': start.isoformat(), 'end_date_time': end.isoformat()},
+                                    target={'entity_id': list(entities)}, return_response=True)
+        response = (result or {}).get('response') or {}
+        return {entity: (response.get(entity) or {}).get('events') or [] for entity in entities}
+
     async def statistics(self, entities, hours):
         """24 samples per entity from the recorder's statistics, all entities in one request.
 
@@ -894,6 +931,8 @@ class Manager:
         self.forecasts = {}
         self.listeners = set()  # asyncio.Event per open /api/events stream
         self.firmware = Firmware(os.environ.get("ESPHOME_CONFIG", "/homeassistant/esphome"), self.path.parent)
+        # The app's one build line (docs/BUILDS.md): updates, plugin builds, New screen and Firmware & USB wait in it.
+        self.build_queue = self.firmware.builds = BuildQueue(self)
         # Plugins (docs/PLUGINS.md): which exist, which each screen runs, their files and their tiles' data.
         self.plugins = plugins.Plugins(self, self.path.parent, self.firmware.root)
         self.updates = Updater(self, self.path.parent / 'updates.json')
@@ -1126,7 +1165,8 @@ class Manager:
         sender = self.page_senders.get(inbox)
         live = getattr(sender, 'memory', None)
         memory = live or getattr(sender, 'last_memory', None)
-        return {**memory, 'live': live is not None} if memory else None
+        # Whether its tiles of the top bar count too (core.layout_cost): a screen that takes cards from its top bar.
+        return {**memory, 'live': live is not None, 'bar_cards': BAR_CARDS_FEATURE in (getattr(sender, 'features', None) or ())} if memory else None
 
     def _discovered(self, inbox):
         """The screen as discovery sees it now, or None while it is not in Home Assistant's registry."""
@@ -1455,14 +1495,19 @@ class Manager:
         screen = self.screen(inbox)
         if screen is None:
             raise ValueError(t('addon.errors.not_paired'))
-        if self.updates.busy():
+        profile, _ = self.updates.resolve(screen)
+        # A build of this screen that runs keeps it until it ends; what only waits goes with the screen.
+        if any(build.state == 'running' for build in self.build_queue.on_the_way(screen=inbox)
+               + (self.build_queue.on_the_way(file=profile) if profile else [])):
             raise ValueError(t('addon.errors.updates.busy'))
         entry = await self.entry_of(screen)
-        profile, _ = self.updates.resolve(screen)
         await self.ha.delete_config_entry(entry)
         LOG.info('Removed %s from Home Assistant', screen['name'])
         # From here Home Assistant no longer has the screen, so nothing below may stop the rest: what could not be
         # removed is named in the answer instead, and the page says so.
+        for build in self.build_queue.line[:]:
+            if build.screen == inbox or (profile and build.file == profile):
+                self.build_queue.drop(build)
         left = []
         if profile:
             try:
@@ -2207,6 +2252,10 @@ class Manager:
         if ENERGY_TILE in shown:
             summed = energy_flow.sums(self.energy_prefs())
             shown |= set(energy_flow.related_entities(self.energy_prefs())) | set(summed)
+        # An entity in a page's top bar opens its card as its tile does (core.BAR_CARDS_FEATURE, firmware 0.56.0).
+        record = self.store.get(inbox)
+        if record and record.get('format') == PAGE_FORMAT:
+            shown |= {item['entity'] for page in record['layout']['pages'] for item in bar_items(page) if item['type'] == 'entity'}
         if entity not in shown:
             return
         what = 'line' if entity in summed else history_card.kind(entity, self.ha.states.get(entity))
@@ -2317,6 +2366,9 @@ class Manager:
         # The energy card (app 0.4.77) reads every sensor of the Energy settings.
         if tile['entity'] == ENERGY_TILE:
             return tuple(energy_flow.related_entities(self.energy_prefs()))
+        # A calendar card (firmware 0.56.0) follows every calendar it shows.
+        if tile['entity'].startswith('calendar.'):
+            return tuple(calendar_feed.calendars_of(tile)[1:])
         if tile['entity'].startswith('media_player.'):
             # The speakers of its menu: who it groups with, the speakers that play its library, and the one it follows.
             entity = tile['entity']
@@ -2339,10 +2391,11 @@ class Manager:
                 return item.get('name_by_user') or item.get('name')
         return None
 
-    def header_message(self, layout, features=None):
-        """`features`: the screen's hello (page_delivery.Sender.features); None for this app's own firmware (the preview)."""
+    def header_message(self, layout, features=None, cards=None):
+        """`features`: the screen's hello (page_delivery.Sender.features); None for this app's own firmware (the preview).
+        `cards`: which tile's card each entity's item opens (core.bar_cards)."""
         return header_bar.message(layout, self.ha.states, self.registry_index(), getattr(self.ha, 'units', {}), getattr(self.ha, 'time_zone', None),
-                                  getattr(self.ha, 'state_words', None), features)
+                                  getattr(self.ha, 'state_words', None), features, cards)
 
     def needs_firmware(self, inbox, layout, screen=None):
         """Version string the screen must run first, or None when the layout can be sent."""
@@ -2504,36 +2557,34 @@ class Manager:
                 LOG.warning('Could not write the language into %s (%s)', profile, error)
 
     def builds(self, screens, profiles=None):
-        """What is being built for each screen right now, whoever asked for it: one record per screen, so the editor tracks
-        every build in one place (its store, `buildOf`) and shows it wherever it fits. `by` is who asked: `update` (the
-        firmware update, its phase in `phase`), `plugins` (the plugin build queue, `plugins` names what it adds) or
-        `install` (Firmware & USB, Install over Wi-Fi). `state` is `queued` or `running`; `stage` is ESPHome's step of the
-        build that runs now (firmware.job), the same the update's progress reads. A screen with nothing on the way has
-        no record."""
+        """What is being built for each screen right now, whoever asked for it (the build line, docs/BUILDS.md): one record
+        per screen, so the editor tracks every build in one place (its store, `buildOf`) and shows it wherever it fits.
+        `by` is what the build is: `update` (the firmware update, its phase in `phase`), `plugins` (a plugin build,
+        `plugins` names what it adds; an update brings them too when the two were asked together) or `install` (New screen,
+        Firmware & USB). `state` is `queued` (with its turn, `place`) or `running`; `stage` is ESPHome's step of the build
+        that runs now, the same the update's progress reads. `id` is the build's own, which the firmware answer
+        (api/firmware `builds`) names with its outcome once it ended. A YAML check builds nothing and has no record; a
+        screen with nothing on the way has none either."""
         if profiles is None:
             profiles = self.firmware.profile_names()
-        job = self.firmware.job if (self.firmware.job or {}).get('state') == 'running' else None
-        plugin_jobs = getattr(getattr(self, 'plugins', None), 'jobs', {}) or {}
+        line = self.build_queue
         out = {}
         for screen in screens:
             inbox = screen['id']
             profile, _ = self.updates.resolve(screen, profiles)
-            here = bool(job and profile and job.get('file') == profile)
-            plugin = plugin_jobs.get(inbox) or {}
-            record = None
-            if inbox == self.updates.current:
-                record = {'by': 'update', 'state': 'running', 'phase': self.updates.phase}
-            elif plugin.get('state') == 'building':
-                record = {'by': 'plugins', 'state': 'running', 'plugins': list(plugin.get('add') or [])}
-            elif here:
-                record = {'by': 'install', 'state': 'running'}
-            elif inbox in self.updates.queue:
-                record = {'by': 'update', 'state': 'queued'}
-            elif plugin.get('state') == 'queued':
-                record = {'by': 'plugins', 'state': 'queued', 'plugins': list(plugin.get('add') or [])}
-            if record:
-                record.update(file=profile, stage=job.get('stage') if here and record['state'] == 'running' else None)
-                out[inbox] = record
+            build = next((b for b in line.on_the_way() if b.by != 'check' and (b.screen == inbox or (profile and b.file == profile))), None)
+            if build is None:
+                continue
+            view = line.view(build)
+            record = {'id': build.id, 'by': build.by, 'state': view['state'], 'file': build.file or profile,
+                      'stage': view.get('stage') if view['state'] == 'running' else None}
+            if build.by == 'update':
+                record['phase'] = build.phase if view['state'] == 'running' else None
+            if build.plugins['add'] or build.by == 'plugins':
+                record['plugins'] = list(build.plugins['add'])
+            if view['state'] == 'queued':
+                record['place'] = view['place']
+            out[inbox] = record
         return out
 
     def pending_profiles(self, screens, profiles):
@@ -2588,6 +2639,33 @@ class Manager:
             except Exception: value=[]
             entry=(time.monotonic(),value);store[key]=entry
         return entry[1]
+
+    def calendar_due(self, tile):
+        """A calendar card's events are a few minutes old: it is sent again with fresh ones."""
+        entry = self.forecasts.get(('calendar', self.calendar_key(tile)))
+        return not entry or time.monotonic() - entry[0] > calendar_feed.SECONDS
+
+    def calendar_key(self, tile):
+        """What a card's events depend on: its calendars, their last change in Home Assistant (an edit or an event's
+        start or end fetches again at once), how far it looks and today."""
+        calendars = calendar_feed.calendars_of(tile)
+        changed = tuple((self.ha.states.get(e) or {}).get('last_updated', '') for e in calendars)
+        tz = getattr(self.ha, 'time_zone', None) or timezone.utc
+        return (tuple(calendars), changed, calendar_feed.ahead_of(tile), datetime.now(tz).date().isoformat())
+
+    async def calendar_extras(self, tile):
+        """The `x.cal` of a calendar tile: Home Assistant's events of its calendars, filtered and packed for the screen."""
+        tz = getattr(self.ha, 'time_zone', None) or timezone.utc
+        now = datetime.now(tz)
+        start, end = calendar_feed.window(now.date(), calendar_feed.ahead_of(tile))
+        calendars = calendar_feed.calendars_of(tile)
+        async def fetch():
+            if not hasattr(self.ha, 'events'):
+                return {}
+            begin = datetime.combine(start, datetime.min.time(), tzinfo=tz)
+            return await self.ha.events(calendars, begin, datetime.combine(end, datetime.min.time(), tzinfo=tz))
+        fetched = await self.cached(self.forecasts, ('calendar', self.calendar_key(tile)), calendar_feed.SECONDS, fetch)
+        return calendar_feed.card(tile, fetched if isinstance(fetched, dict) else {}, self.ha.states, self.registry_index(), tz, now)
 
     def forecast_due(self, entity):
         entry = self.forecasts.get(entity)
@@ -2649,6 +2727,8 @@ class Manager:
                      icon_of=row_icon if light else None,device_name=self.device_name_of(tile['entity']) if light else None,week=week)
         if tile['entity'].startswith('vacuum.'):
             ha_catalogue.chip_words(extra,tile['entity'],self.ha.states,device,getattr(self.ha,'state_words',None))
+        if tile['entity'].startswith('calendar.'):
+            extra = {**(extra or {}), 'cal': await self.calendar_extras(tile)}
         message=state_message(index,tile,states,extra,
                               precision=header_bar.precision_of(entry) if tile['entity'].startswith('sensor.') else None,entry=entry,
                               units=getattr(self.ha,'units',None),week=week)
@@ -2840,6 +2920,8 @@ class Manager:
         for i, tile in enumerate(tiles):
             reuse = not full and i < len(previous['states']) and tile['entity'] not in dirty and dirty.isdisjoint(self.related_entities(tile))
             if reuse and tile['entity'].startswith('weather.') and self.forecast_due(tile['entity']):
+                reuse = False
+            if reuse and tile['entity'].startswith('calendar.') and self.calendar_due(tile):
                 reuse = False
             # A screen on this route has no hello, and none of the flags a newer option needs.
             states.append(previous['states'][i] if reuse else await self.tile_message(i, tile, features=frozenset(), inbox=inbox))
@@ -3179,6 +3261,10 @@ class Manager:
         if request.get('saver') in ('media', 'camera'):
             await self.answer_saver(inbox, screen, request)
             return
+        # The pictures of a plugin tile's places (plugin API 0.10): one atlas for all of them.
+        if isinstance(request.get('tiles'), str) and core.plugin_tile(request['tiles']):
+            await self.answer_plugin_pictures(inbox, screen, request)
+            return
         # The live pictures of a page's camera tiles (app 0.2.91, firmware 0.2.77+): one strip for all of them.
         if 'tiles' in request:
             await self.answer_live(inbox, screen, request)
@@ -3337,6 +3423,47 @@ class Manager:
             LOG.warning('Live pictures: no address for this app on the LAN; set SCREEN_CAMERA_URL')
         await self.send_auxiliary(inbox, {'v': 1, 'op': 'camera', 't': 'live', 'e': listing, 'u': url}, action, request)
         LOG.info('Live pictures of %s on %s%s', ', '.join(entities), screen['name'], '' if url else ': no image')
+
+    async def answer_plugin_pictures(self, inbox, screen, request):
+        """The pictures of a plugin tile's places (plugin API 0.10, plugin_pictures): the tile must be a plugin tile of
+        the screen's layout whose manifest gives it places, and every address one the manifest allows. The answer is a
+        link to one picture of all its frames, as a camera tile gets; an empty link says there is none now (the screen
+        asks again later, each time after a longer while)."""
+        if not screen or not screen.get('online') or not camera_feed.can_show_live(screen):
+            return
+        shape = camera_feed.shape_of(screen)
+        question = plugin_pictures.parse(request, (shape.get('width', 0), shape.get('height', 0)))
+        action = self.transport(inbox, screen) if question else None
+        if not action:
+            return
+        answer = {'v': 1, 'op': 'camera', 't': 'live', 'e': question.entity, 'u': ''}
+        placed = self.layouts.get(inbox, {}).get('tiles', [])
+        if not (question.index < len(placed) and placed[question.index]['entity'] == question.entity):
+            LOG.info('Pictures for %s: not tile %d of %s', question.entity, question.index, screen['name'])
+            return
+        entry = self.plugins.known(question.plugin, inbox)
+        kind = entry.tile(question.tile) if entry else None
+        problem = plugin_pictures.refused(question, entry.manifest if entry else None, kind)
+        if problem:
+            LOG.info('Pictures for %s on %s refused: %s', question.entity, screen['name'], problem)
+            await self.send_auxiliary(inbox, answer, action, request)
+            return
+        raws = await asyncio.gather(*(self.plugins.pictures.fetch(url, entry.manifest, kind) for url in question.sources))
+        base = await camera_feed.base_url(self.ha.request)
+        if not base:
+            LOG.warning('Plugin pictures: no address for this app on the LAN; set SCREEN_CAMERA_URL')
+        elif any(raw is not None for raw in raws):
+            try:
+                body = await self.plugins.pictures.atlas(question, raws, camera_feed.compact_pictures(screen))
+            except Exception as error:
+                LOG.info('Pictures for %s on %s cannot be painted (%s)', question.entity, screen['name'], type(error).__name__)
+                body = None
+            if body:
+                token = self.camera.link(question.entity, question.atlas[:2], still=body)
+                answer['u'] = f'{base}/camera/{token}.bmp'
+        await self.send_auxiliary(inbox, answer, action, request)
+        LOG.info('Pictures of %s on %s: %d of %d%s', question.entity, screen['name'], sum(raw is not None for raw in raws),
+                 len(raws), '' if answer['u'] else ', no picture')
 
     async def thumbnail(self, entity, url, title=''):
         """A picture of a player's library, fetched once and kept a while (the library's covers and the favourites'); None
@@ -3793,6 +3920,9 @@ def create_app(manager, development=False):
         `private`: behind ingress the request carries Home Assistant's session. index.html and api/ stay no-store."""
         if request.path.startswith('/assets/') and response.status in (200, 304):
             response.headers['Cache-Control'] = 'private, max-age=31536000, immutable'
+        # A plugin's picture is asked for under its commit (plugins.image_url), so it too can be kept: a day.
+        elif request.path.startswith('/api/plugins/') and request.path.endswith('/image') and response.status == 200:
+            response.headers['Cache-Control'] = 'private, max-age=86400'
     app.on_response_prepare.append(cache_assets)
 
     # The page is the Vite build of web/ (npm run build writes it here): index.html names its script and styles
@@ -3910,7 +4040,9 @@ def create_app(manager, development=False):
                 'editor_features': editor_features,
                 'pending': manager.pending_profiles(screens, profiles),
                 'updates': manager.updates.summary(screens, profiles),
-                # Every build on the way, per screen (Manager.builds): the editor's one source for "something is building".
+                # The app's build line (docs/BUILDS.md): every build that runs, waits or ended last, and per screen the one
+                # on its way (Manager.builds), from one look at the line, so the editor has one source for every build.
+                'line': manager.build_queue.payload(),
                 'builds': manager.builds(screens, profiles),
                 'language': manager.region.view()}
     async def seen_pending(payload):
@@ -4126,6 +4258,25 @@ def create_app(manager, development=False):
         words = getattr(ha, 'words_by_language', {}) or {}
         named = words.get(language) or words.get('en') or words.get('*') or ha.state_words or {}
         return web.json_response({'values': ha_catalogue.subtitle_attributes(entity, ha.states.get(entity), named)})
+    async def display_precision(request):
+        """A sensor's display precision (Home Assistant's entity setting, app dev): GET reads it, PUT {entity, precision}
+        sets it in Home Assistant, precision 0-6 or null for Default. The value on every tile, meter and top bar item of
+        the sensor follows Home Assistant's setting, as on its own dashboards."""
+        data = await request.json() if request.method == 'PUT' else dict(request.query)
+        entity = data.get('entity', '') if isinstance(data, dict) else ''
+        ha = manager.ha
+        if not entity_id(entity) or not entity.startswith('sensor.') or not hasattr(ha, 'display_precision'):
+            raise ValueError(t('addon.errors.layout.invalid_setting', setting='entity'))
+        # Home Assistant's dialog labels each choice with the state as it is now, unrounded: it travels with the answer.
+        now = lambda answer: {**answer, 'state': (ha.states.get(entity) or {}).get('state')}
+        if request.method == 'GET':
+            return web.json_response(now(ha.display_precision(entity)))
+        precision = data.get('precision')
+        if precision is not None and (type(precision) is not int or not 0 <= precision <= 6):
+            raise ValueError(t('addon.errors.layout.invalid_setting', setting='precision'))
+        if not ha.display_precision(entity)['editable']:
+            raise ValueError(t('addon.errors.display_precision_unregistered'))
+        return web.json_response(now(await ha.set_display_precision(entity, precision)))
     async def change_language(request):
         """Settings -> Language & region (app 0.2.90): the language, clock and number format of every screen."""
         data = await request.json()
@@ -4148,7 +4299,9 @@ def create_app(manager, development=False):
         data = await request.json() if request.can_read_body else {}
         return web.json_response(manager.updates.start(request.match_info['inbox'], data.get('host'), data.get('reinstall') is True))
     async def update_all(request):
-        return web.json_response({'started': manager.updates.start_all()})
+        # `reinstall`: Reinstall all from dev, every screen again with the newest dev (dev channel only).
+        data = await request.json() if request.can_read_body else {}
+        return web.json_response({'started': manager.updates.start_all(isinstance(data, dict) and data.get('reinstall') is True)})
     async def update_settings(request):
         manager.updates.set_auto((await request.json()).get('auto'))
         return web.json_response(manager.updates.summary())
@@ -4316,8 +4469,11 @@ def create_app(manager, development=False):
             if eid.startswith('automation.') and isinstance(state.get('attributes', {}).get('current'), int):
                 # How many runs go on right now: a tile set to run its actions is coloured while they do.
                 attributes['current'] = state['attributes']['current']
+            # A duration in hours and minutes as the screens write it (durations.py), else Home Assistant's word.
+            word = (durations.text(message['state'], (state.get('attributes') or {}).get('unit_of_measurement'), i18n.screen_language())
+                    if eid.startswith('sensor.') and durations.is_duration(state.get('attributes')) else None)
             result[eid] = {'state': message['state'], 'a': attributes,
-                           'word': state_word(eid, state.get('state'), state.get('attributes'), entry, getattr(manager.ha, 'state_words', None))}
+                           'word': word or state_word(eid, state.get('state'), state.get('attributes'), entry, getattr(manager.ha, 'state_words', None))}
         return web.json_response({'states': result})
     async def firmware_preview(request):
         """The device's normal packets, for an unsaved layout. No device registration or HA actions."""
@@ -4437,12 +4593,22 @@ def create_app(manager, development=False):
         return web.Response(body=claude_skill.archive(), content_type='application/zip',
                             headers={'Content-Disposition': f'attachment; filename="{claude_skill.NAME}.zip"'})
     async def firmware_status(request):
-        # New screen asks what is taken while the name is typed, so a clash is said before anything is written.
+        # New screen asks what is taken while the name is typed, so a clash is said before anything is written. The build
+        # line itself goes with the live inventory (`line`); this answer has ESPHome's job and the log of what runs now.
         return web.json_response({**manager.firmware.status(), 'taken': manager.taken_names()})
     async def firmware_start(request):
+        """Firmware & USB and the YAML check: one ESPHome action, which waits its turn in the build line. The answer is
+        that build (BuildQueue.view), followed by its `id` in the firmware answer's `builds`."""
         data = await request.json()
         manager.preflight_profile(data)
-        return web.json_response(manager.firmware.start(data))
+        return web.json_response(manager.build_queue.view(manager.build_queue.attended(data)))
+    async def firmware_build_log(request):
+        """The log of one build of the line, also after the next one started (BuildQueue.log)."""
+        try:
+            number = int(request.match_info['build'])
+        except ValueError:
+            raise ValueError(t('addon.errors.firmware.build_gone')) from None
+        return web.json_response(manager.build_queue.log(number))
     async def firmware_override(request):
         return web.json_response(manager.firmware.override(request.match_info['file']))
     async def firmware_override_save(request):
@@ -4535,10 +4701,11 @@ def create_app(manager, development=False):
             raise ValueError(t(FEEDBACK_ERRORS.get(str(error), 'addon.errors.invalid_input'))) from None
         return web.json_response({'feedback': store.view(device)})
     async def shutdown(app):
-        for task in (manager.updates.task, manager.firmware.task):
-            if task and not task.done():
-                task.cancel()
-                with contextlib.suppress(asyncio.CancelledError): await task
+        await manager.build_queue.close()
+        task = manager.firmware.task
+        if task and not task.done():
+            task.cancel()
+            with contextlib.suppress(asyncio.CancelledError): await task
         await manager.feedback.close()
     app.on_cleanup.append(shutdown)
     app.router.add_get('/api/screens/{inbox}/inspect', inspector)
@@ -4548,6 +4715,7 @@ def create_app(manager, development=False):
     app.router.add_put('/api/language', change_language)
     app.router.add_get('/api/firmware', firmware_status)
     app.router.add_post('/api/firmware/jobs', firmware_start)
+    app.router.add_get('/api/firmware/builds/{build}/log', firmware_build_log)
     app.router.add_get('/api/firmware/profiles/{file}/override', firmware_override)
     app.router.add_put('/api/firmware/profiles/{file}/override', firmware_override_save)
     app.router.add_get('/api/firmware/profiles/{file}/download', firmware_download)
@@ -4610,6 +4778,15 @@ def create_app(manager, development=False):
                                                                    request.query.get('_screen')))
         app.router.add_get('/api/plugins/{plugin}/preview/{tile}', plugins_preview)
 
+        async def plugins_image(request):
+            # A plugin's picture for the Plugins page (store.png), served by the app: the editor shows no picture of
+            # another address (its img-src is 'self').
+            body = await manager.plugins.store_image(request.match_info['plugin'])
+            if body is None:
+                raise web.HTTPNotFound()
+            return web.Response(body=body, content_type='image/png')
+        app.router.add_get('/api/plugins/{plugin}/image', plugins_image)
+
         async def plugins_link(request):
             data = await request.json()
             if not isinstance(data, dict):
@@ -4639,6 +4816,27 @@ def create_app(manager, development=False):
             raise ValueError(t('addon.errors.extras.request'))
         return web.json_response(await entity_settings.set_extra(manager, request.match_info['inbox'], data.get('entity'),
                                                                  data.get('value')))
+    async def calendar_preview(request):
+        """A calendar card as the screen would get it, for the editor (firmware 0.56.0): its events after the tile's
+        filters, every place its calendars' events name, most used first, for the place filter's choices, and the
+        calendars that take new events (Home Assistant's CREATE_EVENT), which "Status and booking" can book on."""
+        data = await request.json()
+        tile = data.get('tile') if isinstance(data, dict) else None
+        if not isinstance(tile, dict) or not str(tile.get('entity', '')).startswith('calendar.'):
+            raise ValueError(t('addon.errors.invalid_input'))
+        try:
+            options = calendar_feed.validate(tile.get('options') or {})
+        except ValueError:
+            options = {}
+        tile = {'entity': tile['entity'], 'options': options}
+        card = await manager.calendar_extras(tile)
+        every = await manager.calendar_extras({'entity': tile['entity'], 'options': {k: v for k, v in options.items() if k in ('calendars', 'ahead')}})
+        places = Counter(row[5] for row in every['e'] if row[5])
+        bookable = [entity for entity, state in manager.ha.states.items() if entity.startswith('calendar.') and
+                    isinstance(((state or {}).get('attributes') or {}).get('supported_features'), int) and
+                    state['attributes']['supported_features'] & calendar_feed.CREATE_EVENT]
+        return web.json_response({'cal': card, 'places': [place for place, _ in places.most_common(24)], 'bookable': sorted(bookable)})
+    app.router.add_post('/api/calendar/preview', calendar_preview)
     app.router.add_get('/api/screens/{inbox}/extras', extras)
     app.router.add_post('/api/screens/{inbox}/extras', extra)
     app.router.add_get('/', index)
@@ -4662,6 +4860,8 @@ def create_app(manager, development=False):
     app.router.add_post('/api/alerts/test', test_alert)
     app.router.add_get('/api/entity-actions', entity_actions)
     app.router.add_get('/api/entity-subtitle', entity_subtitle)
+    app.router.add_get('/api/display-precision', display_precision)
+    app.router.add_put('/api/display-precision', display_precision)
     app.router.add_post('/api/header-preview', header_preview)
     app.router.add_post('/api/claude-skill', install_claude_skill)
     app.router.add_get('/api/claude-skill.zip', download_claude_skill)

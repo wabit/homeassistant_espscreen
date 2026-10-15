@@ -16,6 +16,34 @@ export type TileOptions = {
   background?: string;
   history_hours?: number;
   action?: { action: string; data?: Record<string, unknown> };
+  // A calendar card's choices (firmware 0.56.0, calendar_feed.validate): what it shows, the calendars beside the tile's
+  // own, which events it lets through, how far it looks, when an event starts soon and where its full screen opens.
+  style?: "events" | "busy_free" | "room";
+  calendars?: string[];
+  places?: string[];
+  words?: string[];
+  hide_words?: string[];
+  all_day?: boolean;
+  tentative?: boolean;
+  private?: boolean;
+  ahead?: number;
+  soon?: number;
+  start_view?: string;
+  // ... and the week's first day, its hours, the month's week numbers, and where "Status and booking" books.
+  week_start?: string;
+  hours?: [number, number];
+  week_numbers?: boolean;
+  book_on?: string;
+  book_place?: string;
+  book_title?: string;
+  // A sensor's meter (firmware 0.56.0, meter.validate): its look, its own range (both ends or none), how many colours,
+  // their names (Home Assistant's) and the thresholds between them in the sensor's unit.
+  meter?: "ring" | "tape" | "bar";
+  min?: number;
+  max?: number;
+  segments?: number;
+  colors?: string[];
+  thresholds?: number[];
   [key: string]: unknown;
 };
 // What a favourite plays (app 0.4.42), as Home Assistant's library names it: its content id and type, the title and the
@@ -40,7 +68,9 @@ export type HeaderItem = { id?: string; type: string; entity?: string; content?:
 // without its extras for want of memory lately; `live`: said by the screen as it is now, rather than the last thing it
 // said before it went offline.
 // `room` is null while the screen is still measuring it (firmware 0.51.0).
-export type ScreenMemory = { room: number | null; used: number; psram: boolean; tile: number; extra: number; page?: number; short?: boolean; live?: boolean };
+// `bar_cards`: the screen takes cards from its top bar (firmware 0.56.0), so its tiles of the top bar count too (model/memory.ts).
+export type ScreenMemory = { room: number | null; used: number; psram: boolean; tile: number; extra: number; page?: number; short?: boolean; live?: boolean;
+  bar_cards?: boolean };
 // `barItems`: the items one page's top bar takes there (model/pages.ts barLimit). `plugins`: whether plugin tiles and
 // items are taken there (the add-on serves plugins, the plugins store's pluginsEnabled); never stored with a document.
 export type PageGrid = Readonly<{ columns: number; rows: number; pages?: number; barItems?: number; plugins?: boolean }>;
@@ -58,7 +88,14 @@ export type PageTile = {
   placement: { row: number; column: number; columns: number; rows: number };
   appearance: { label: string; presentation?: "single" | "wide" | "tall" | "square" | "full" | `${number}x${number}`; display?: string; icon?: string; background?: string; historyHours?: number; refresh?: number; subtitle?: string; fit?: string; overlay?: string;
     mapEntities?: string[]; mapFraming?: string; mapDistance?: string; mapFollow?: string; mapMarkers?: string; mapNames?: string;
-    mapZones?: string; mapStreets?: string; mapLook?: string; energyFlow?: string };
+    mapZones?: string; mapStreets?: string; mapLook?: string; energyFlow?: string;
+    // A calendar card's choices (firmware 0.56.0): TileOptions' style, calendars, places, words, hide_words, all_day,
+    // tentative, private, ahead, soon and start_view.
+    calendarStyle?: string; calendarEntities?: string[]; calendarPlaces?: string[]; calendarWords?: string[]; calendarHideWords?: string[];
+    calendarAllDay?: boolean; calendarTentative?: boolean; calendarPrivate?: boolean; calendarAhead?: number; calendarSoon?: number; calendarStartView?: string;
+    calendarWeekStart?: string; calendarHours?: [number, number]; calendarWeekNumbers?: boolean; calendarBookOn?: string; calendarBookPlace?: string; calendarBookTitle?: string;
+    // A sensor's meter (firmware 0.56.0): TileOptions' meter, min, max, segments, colors and thresholds.
+    meterStyle?: string; meterMin?: number; meterMax?: number; meterSegments?: number; meterColors?: string[]; meterThresholds?: number[] };
   interaction: { tap?: string; inline?: string; controls?: string; action?: TileOptions["action"]; guard?: string; play?: FavoritePlay; speaker?: string; shuffle?: string; repeat?: string };
   children?: ChildTile[];
 };
@@ -229,11 +266,25 @@ export type ChangelogSection = { app: string; firmware: string; boards?: string[
 // `unavailable_since`: when an unavailable entity last changed in Home Assistant, in seconds; only on an unavailable one.
 export type Entity = { id: string; name: string; area?: string; device?: string; icon?: string; state?: string; tile?: boolean; screen_name?: string; unavailable_since?: number };
 export type IconInfo = { name: string; cp: string; label: string };
-// What is being built for one screen right now, whoever asked (Manager.builds in the add-on): the firmware update, the
-// plugin build queue, or Install over Wi-Fi from Firmware & USB. The editor's one source for "something is building".
+// What is being built for one screen right now, whoever asked (Manager.builds in the add-on): the firmware update, a
+// plugin build, or New screen and Firmware & USB. The editor's one source for "something is building". Every build waits
+// its turn in the add-on's one build line (docs/BUILDS.md): `place` is its turn while it waits (1 is next), `id` the
+// build's own, which the line (LineBuild) names with its outcome once it ended. An update that a plugin build joined
+// names the plugins it brings too.
 export type Build = {
-  by: "update" | "plugins" | "install"; state: "queued" | "running"; file?: string | null; stage?: string | null;
-  phase?: string | null; plugins?: string[];
+  id?: number; by: "update" | "plugins" | "install"; state: "queued" | "running"; place?: number; file?: string | null;
+  stage?: string | null; phase?: string | null; plugins?: string[];
+};
+// One build of the add-on's build line (the live inventory's `line`, build_queue.BuildQueue.view): what runs, what waits
+// in order and the last ones that ended, newest first. `check` is a YAML check. While it waits, `place` is its turn and
+// `after` the profile that builds now; while it runs, ESPHome's `stage` and the build's `memory`; once it ended, why
+// (`reason`) and the memory it had. Its log is asked by its id (stores/builds.ts loadBuildLog).
+export type LineState = "queued" | "running" | "success" | "failed" | "skipped" | "interrupted";
+export type LineBuild = {
+  id: number; by: Build["by"] | "check"; file: string | null; screen?: string | null; action: string; target?: string;
+  state: LineState; asked: number; started: number | null; finished: number | null; phase?: string | null; plugins?: string[];
+  place?: number; after?: string | null; stage?: string | null; memory?: import("./model/install-progress").BuildMemory | null;
+  reason?: string | null;
 };
 export type Inventory = {
   editor_features?: { tall_tiles?: boolean; plugins?: boolean };
@@ -248,14 +299,18 @@ export type Inventory = {
   // (app 0.4.73), `failed` when Home Assistant asked something only the person can answer.
   pending?: { friendly: string; file: string; node?: string; installed?: boolean; downloaded?: boolean; api_key?: string; seen?: boolean; pairing?: "adding" | "failed" | null }[];
   // `channel`: the branch the screens build from, when the app was added from this repository (docs/RELEASING.md).
-  updates?: { target: string; busy?: boolean | string | null; pending?: number; auto?: boolean; channel?: "main" | "dev" | null };
+  // `reinstallable`: on the dev channel, how many screens Reinstall all from dev builds again (Updater.reinstallable).
+  updates?: { target: string; busy?: boolean | string | null; pending?: number; auto?: boolean; channel?: "main" | "dev" | null; reinstallable?: number };
   builds?: Record<string, Build>;
+  // The add-on's build line (build_queue.py, docs/BUILDS.md): what runs, what waits and the last that ended (newest
+  // first), from the same look at the line as `builds`, in every live answer.
+  line?: LineBuild[];
   // The CHANGELOG by release, newest first: only in the full inventory, not in the live payload (app 0.2.78).
   changelog?: ChangelogSection[];
   claude_skill?: { path: string; installed: boolean; current: boolean; restart?: boolean };
   icons?: {
     groups: { label: string; icons: IconInfo[] }[];
-    builtin?: Record<string, string>; weather: Record<string, string>; sun: Record<string, string>;
+    builtin?: Record<string, string>; weather: Record<string, string>; sun: Record<string, string>; calendar?: Record<string, string>;
     defaults: Record<string, string>; fallback: string; controls?: Record<string, string>;
   };
   backgrounds?: Record<string, { label: string; color?: string }>;

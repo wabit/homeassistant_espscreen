@@ -6,6 +6,7 @@ import { t } from "../i18n";
 import { barMetricsFor } from "../model/topbar";
 import { boardTitle } from "../model/boards";
 import { homeView } from "../model/overview";
+import { waitingText } from "../model/screen-status";
 import UiMenu from "./ui/UiMenu.vue";
 import UiMenuItem from "./ui/UiMenuItem.vue";
 import UiMenuSeparator from "./ui/UiMenuSeparator.vue";
@@ -61,6 +62,7 @@ onMounted(entities.loadOverview);
   <section id="home" class="home">
     <header class="home-head">
       <!-- On a phone the sidebar's row is gone (app 0.4.40): search, alerts, settings and a new screen are in this menu. -->
+      <button v-if="ui.phone" type="button" class="icon-btn phone-menu-key" id="phone-menu" :aria-label="t('editor.phone.menu')" @click="ui.sideOpen = true"><Icon name="menu" /></button>
       <UiMenu v-if="ui.phone" width="240px">
         <template #trigger><button type="button" class="icon-btn home-more" :aria-label="t('editor.screen_view.more')"><Icon name="dots-horizontal" /></button></template>
         <UiMenuItem icon="magnify" @select="ui.palette = true">{{ t("editor.sidebar.search") }}</UiMenuItem>
@@ -100,11 +102,11 @@ onMounted(entities.loadOverview);
         </span>
         <span class="home-foot">
           <ProgressRing v-if="building(screen)" class="home-ring" :size="16" :percent="builds.buildProgress(screen)?.percent ?? 0"
-            :label="builds.buildProgress(screen)?.text || t('editor.build.waiting')" />
+            :label="builds.buildProgress(screen)?.text || waitingText(builds.buildOf(screen))" />
           <span v-else class="led" :class="scr.screenLight(screen)"></span>
           <span class="home-name">
             <strong>{{ screen.name }}</strong>
-            <small v-if="building(screen)" class="building">{{ builds.buildProgress(screen) ? `${builds.buildProgress(screen)!.percent} % · ${builds.buildProgress(screen)!.text}` : t("editor.build.waiting") }}</small>
+            <small v-if="building(screen)" class="building">{{ builds.buildProgress(screen) ? `${builds.buildProgress(screen)!.percent} % · ${builds.buildProgress(screen)!.text}` : waitingText(builds.buildOf(screen)) }}</small>
             <small v-else-if="!scr.screenSubline(screen) && broken.onScreen(screen).length" class="broken">{{ t("editor.broken.short", broken.onScreen(screen).length) }}</small>
             <small v-else-if="scr.screenSubline(screen)" :class="scr.screenSubline(screen)!.kind">{{ scr.screenSubline(screen)!.text }}</small>
             <small v-else-if="place(screen)">{{ place(screen) }}</small>

@@ -91,8 +91,8 @@ describe("the firmware job", () => {
 describe("a build that ends while the page is open", () => {
   const living = (result?: { state: string; time: number }) =>
     ({ id: "text.living", name: "Living room", online: true, layout: {}, update: { profile: "living.yaml", host: "10.0.0.2", ...(result ? { result: { message: "", ...result } } : {}) } }) as unknown as Screen;
-  const arrive = (screen: Screen, builds: Record<string, any> = {}) => {
-    useInventoryStore().inventory = { screens: [screen], entities: [], builds } as any;
+  const arrive = (screen: Screen, builds: Record<string, any> = {}, line: any[] = []) => {
+    useInventoryStore().inventory = { screens: [screen], entities: [], builds, line } as any;
     useBuildsStore().prune();
   };
 
@@ -128,13 +128,24 @@ describe("a build that ends while the page is open", () => {
     expect(location.hash).toBe("#firmware");
   });
 
-  it("reads a plugin build's outcome from its firmware job, asked for once more as it ends", async () => {
-    const api = fakeApi({ "GET firmware": { job: { file: "living.yaml", state: "failed", started: 2 }, logs: [] } });
-    arrive(living(), { "text.living": { by: "plugins", state: "queued", file: "living.yaml" } });
-    arrive(living(), { "text.living": { by: "plugins", state: "running", file: "living.yaml" } });
-    arrive(living());
-    await vi.waitFor(() => expect(useUiStore().notice?.message).toBe(t("editor.build.build_failed", { name: "Living room" })));
-    expect(api.count("GET firmware")).toBe(1);
+  it("reads a plugin build's outcome from the build line by its id, in the same answer that no longer names it", async () => {
+    // The next build of the line started at once (another screen's): the outcome is this build's own, and nothing is asked.
+    const api = fakeApi({});
+    arrive(living(), { "text.living": { id: 7, by: "plugins", state: "queued", place: 1, file: "living.yaml" } });
+    arrive(living(), { "text.living": { id: 7, by: "plugins", state: "running", file: "living.yaml" } });
+    arrive(living(), {}, [{ id: 8, by: "update", file: "desk.yaml", action: "install", state: "running", asked: 7, started: 8, finished: null },
+                          { id: 7, by: "plugins", file: "living.yaml", action: "install", state: "failed", asked: 1, started: 2, finished: 6 }]);
+    expect(useUiStore().notice?.message).toBe(t("editor.build.build_failed", { name: "Living room" }));
+    expect(api.calls.length).toBe(0);
+  });
+
+  it("follows a plugin build that became the screen's update, and reads that update's result", async () => {
+    arrive(living({ state: "success", time: 10 }), { "text.living": { id: 3, by: "plugins", state: "queued", place: 1, file: "living.yaml", plugins: ["bus"] } });
+    arrive(living({ state: "success", time: 10 }), { "text.living": { id: 3, by: "update", state: "running", file: "living.yaml", plugins: ["bus"] } });
+    expect(useBuildsStore().watched["text.living"]).toMatchObject({ by: "update", id: 3 });
+    arrive(living({ state: "success", time: 50 }));
+    await Promise.resolve();
+    expect(useUiStore().notice?.message).toBe(t("editor.build.ready", { name: "Living room" }));
   });
 
   it("forgets a build whose screen went or whose request was refused", async () => {

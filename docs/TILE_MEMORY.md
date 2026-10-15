@@ -37,7 +37,10 @@ index. Six is what every screen reads; an app that numbers by more says so in th
 whose hello said it takes more, so an older screen or an older app still means the same slot.
 
 An entity item shows its status, when it last changed, or its icon alone (`content: icon`), which takes the least width:
-the icon follows the state and its colour as on a tile.
+the icon follows the state and its colour as on a tile. A tap on it opens the entity's card (firmware 0.56.0,
+docs/PAGES.md). On a screen that takes that, an entity in a top bar that is on no tile costs one tile of its type as
+well, which the add-on and the editor count with the layout (`core.bar_entities`, `barEntities` in
+`web/src/model/memory.ts`).
 
 ## The memory budget
 
@@ -111,6 +114,13 @@ beside its memory bar.
 
 The extras of a tile live in PSRAM on a board that has it (ESPHome's `RAMAllocator`, PSRAM first), as the tile list
 does. That alone took about a kilobyte per tile of weather, media or climate out of the memory inside the chip.
+
+A plugin tile keeps its options and data (`Extra::plugin_options`, `plugin_state`, up to 2.6 KB of data each) in PSRAM
+too, and so do the documents the plugin host parses them into, the plugin's own objects (`tessera::Tile`,
+`tessera::Card`) and what it keeps as `tessera::Text` and `tessera::List` (`roomy.h`, docs/PLUGINS.md, "Memory"). The
+boards build with `CONFIG_SPIRAM_USE_CAPS_ALLOC`, so a plain `std::string`, `std::vector` or `new` never lands in PSRAM:
+only what asks for it does, and `roomy.h` is the one way the firmware asks. A plugin tile's price (its manifest's
+`memory`) is unchanged: it holds on a board without PSRAM, and on a board with PSRAM it now prices high.
 
 Should LVGL itself be refused memory while it draws, nothing can carry on: its check stops the loop, and ESPHome's task
 watchdog restarts the screen within seconds and keeps a crash report.

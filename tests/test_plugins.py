@@ -12,9 +12,12 @@ ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / 'screen_manager' / 'app'))
 
 import core  # noqa: E402
+from build_queue import BuildQueue  # noqa: E402
 import page_layout  # noqa: E402
 import plugin_fetch  # noqa: E402
 import plugin_manifest as pm  # noqa: E402
+import plugin_pictures  # noqa: E402
+import tile_art  # noqa: E402
 from firmware import Firmware  # noqa: E402
 from page_delivery import plugins_of  # noqa: E402
 
@@ -154,6 +157,20 @@ class Manifest(unittest.TestCase):
         probe = yaml.safe_load((ROOT / 'tests/fixtures/plugins/host_probe/tessera-plugin.yaml').read_text())
         self.assertEqual(probe['api'], f'{major}.{minor}')
 
+    def test_a_tile_may_have_places_for_pictures(self):
+        """`pictures` (0.10): how many places a tile has at most, 0 without; the screen asks for as many at most."""
+        self.assertEqual(pm.check(manifest(), ENGLISH)['tiles'][0]['pictures'], 0)
+        tiles = manifest()['tiles']
+        tiles[0]['pictures'] = 8
+        self.assertEqual(pm.check(manifest(tiles=tiles), ENGLISH)['tiles'][0]['pictures'], 8)
+        for bad in (9, -1, 'two', 2.5, True):
+            tiles[0]['pictures'] = bad
+            with self.assertRaises(pm.ManifestError) as caught:
+                pm.check(manifest(tiles=tiles), ENGLISH)
+            self.assertIn('tiles[0].pictures', str(caught.exception))
+        header = (ROOT / 'components/smart_display/tile_picture.h').read_text()
+        self.assertIn(f'constexpr size_t MAX_PARTS = {pm.MAX_PICTURES};', header)
+
     def test_the_two_ticks_have_two_names(self):
         """A plugin's 250 ms moment with millis() is on_interval; on_tick is a tile's or a card's second with the clock."""
         header = (ROOT / 'components/smart_display/plugin_api.h').read_text()
@@ -164,6 +181,160 @@ class Manifest(unittest.TestCase):
     def test_placeholder_price_is_the_screens(self):
         host = (ROOT / 'components/smart_display/plugin_host.h').read_text()
         self.assertIn(f'PLACEHOLDER_BYTES = {core.PLUGIN_PLACEHOLDER_BYTES};', host)
+
+
+class Pictures(unittest.IsolatedAsyncioTestCase):
+    """The pictures of a plugin tile (plugin API 0.10, plugin_pictures): the question as the screen asks it, where a
+    picture may come from, and a cache by address."""
+    ATLAS = '[[0,0,60,90,6,0],[70,0,60,90,6,0]]'
+    SRC = '["https://api.example.org/a.jpg","https://api.example.org/b.jpg"]'
+
+    def question(self, **changes):
+        request = {'tiles': 'plugin:bus.next', 'idx': '3', 'bg': '202020', 'dark': '1', 'atlas': self.ATLAS, 'src': self.SRC,
+                   'fit': '["cover","contain"]'}
+        request.update(changes)
+        return plugin_pictures.parse(request, (480, 480))
+
+    def test_the_question_names_the_tile_its_frames_and_their_addresses(self):
+        q = self.question()
+        self.assertEqual((q.entity, q.plugin, q.tile, q.index, q.ground, q.dark), ('plugin:bus.next', 'bus', 'next', 3, 0x202020, True))
+        self.assertEqual(q.atlas, (130, 90, ((0, 0, 60, 90, 6, 0), (70, 0, 60, 90, 6, 0))))
+        self.assertEqual(q.sources, ['https://api.example.org/a.jpg', 'https://api.example.org/b.jpg'])
+        self.assertEqual(q.fits, ['cover', 'contain'])
+        self.assertEqual(self.question(fit=None).fits, ['cover', 'cover'])   # cover without a word
+        for bad in (dict(tiles='camera.front'), dict(idx='x'), dict(bg='red'), dict(src='["one"]'), dict(src='[1,2]'),
+                    dict(fit='["cover"]'), dict(fit='["fill","cover"]'), dict(atlas='[[0,0,60,90,6,0]]'), dict(src='[]'),
+                    dict(src='[' + ','.join(['"https://api.example.org/x.jpg"'] * 9) + ']'), dict(atlas='[[0,0,600,90,6,0],[70,0,60,90,6,0]]')):
+            self.assertIsNone(self.question(**bad), bad)
+
+    def test_places_may_overlap_turn_and_mirror(self):
+        """The places of one card are its layers (0.10): their frames may overlap, each may turn and have a reflection."""
+        q = self.question(atlas='[[0,0,60,90,6,0],[40,0,60,90,6,0]]', turn='["right",""]', mirror='[0,1]')
+        self.assertEqual((q.turns, q.mirrors), (['right', ''], [False, True]))
+        self.assertEqual(q.styles(), [('fill', 'right', False), ('within', '', True)])
+        self.assertEqual(self.question().turns, ['', ''])   # a flat card asks without them
+        for bad in (dict(turn='["up",""]'), dict(turn='["left"]'), dict(mirror='[2,0]'), dict(mirror='{}'), dict(turn='x')):
+            self.assertIsNone(self.question(**bad), bad)
+        # Covers of different tiles still never overlap.
+        self.assertIsNone(tile_art.parse('[[0,0,60,90,6,0],[40,0,60,90,6,0]]', (480, 480), 2))
+
+    def test_the_reflection_is_the_screens_share(self):
+        header = (ROOT / 'components/smart_display/plugin_api.h').read_text()
+        self.assertIn(f'constexpr int MIRROR_PERCENT = {tile_art.MIRROR_PERCENT};', header)
+
+    @unittest.skipUnless(__import__('importlib').util.find_spec('PIL'), 'Pillow')
+    def test_layers_overlap_turn_and_mirror(self):
+        from PIL import Image
+        import io
+        def picture(colour):
+            raw = io.BytesIO()
+            Image.new('RGB', (100, 150), colour).save(raw, 'PNG')
+            return raw.getvalue()
+        red, blue = picture((255, 0, 0)), picture((0, 0, 255))
+        atlas = tile_art.parse('[[0,0,60,90,8,0],[40,0,60,117,8,0]]', (480, 480), 2, overlap=True)
+        body = tile_art.layers([red, blue], 0x202020, atlas, [('fill', '', False), ('fill', '', True)])
+        with Image.open(io.BytesIO(body)) as image:
+            rgb = image.convert('RGB')
+            self.assertEqual(rgb.getpixel((20, 45)), (255, 0, 0))      # the first, where nothing lies over it
+            self.assertEqual(rgb.getpixel((50, 45)), (0, 0, 255))      # the later place lies over the earlier
+            self.assertGreater(rgb.getpixel((40, 1))[0], 245)          # its rounded corner shows the red under it
+            self.assertEqual(rgb.getpixel((99, 0)), (0x20, 0x20, 0x20))  # and the card where nothing lies under it
+            below = rgb.getpixel((70, 92))                            # the reflection: faint blue on the card
+            self.assertTrue(below[2] > 0x40 and below[2] < 160 and below[0] < 0x30, below)
+            self.assertTrue(all(abs(c - 0x20) <= 3 for c in rgb.getpixel((70, 116))))   # faded out at its foot
+        # Turned to face the right: the left edge near (full height), the right edge far (lower and shorter).
+        atlas = tile_art.parse('[[0,0,40,100,0,0]]', (480, 480), 1)
+        body = tile_art.layers([red], 0x202020, atlas, [('fill', 'right', False)])
+        with Image.open(io.BytesIO(body)) as image:
+            rgb = image.convert('RGB')
+            self.assertEqual(rgb.getpixel((1, 2))[0], 255)
+            self.assertEqual(rgb.getpixel((38, 2)), (0x20, 0x20, 0x20))
+            self.assertEqual(rgb.getpixel((38, 50))[0], 255)
+
+    def test_where_a_picture_may_come_from(self):
+        checked = pm.check(manifest(), ENGLISH)
+        tile = dict(checked['tiles'][0], pictures=2)
+        allowed = lambda url, t=tile: plugin_pictures.allowed(url, checked, t)
+        self.assertEqual(allowed('https://api.example.org/a.jpg'), 'network')
+        self.assertIsNone(allowed('https://image.tmdb.org/a.jpg'))         # a host the manifest does not name
+        self.assertIsNone(allowed('https://10.0.0.5/a.jpg'))
+        self.assertIsNone(allowed('ftp://api.example.org/a.jpg'))
+        # Home Assistant's own pictures: on a tile of an entity only, and only the paths a map marker takes.
+        self.assertIsNone(allowed('/api/image/serve/abc/512x512'))
+        entity_tile = dict(tile, domains=['person'])
+        self.assertEqual(allowed('/api/image/serve/abc/512x512', entity_tile), 'home_assistant')
+        self.assertEqual(allowed('/api/image_proxy/image.door?token=1', entity_tile), 'home_assistant')
+        self.assertEqual(allowed('/local/me.png', entity_tile), 'home_assistant')
+        for bad in ('/api/camera_proxy/camera.x', '/api/image/serve/../x', '/local//x', '/api/states'):
+            self.assertIsNone(allowed(bad, entity_tile), bad)
+        # A tile without places shows nothing, whatever the address.
+        self.assertIsNone(allowed('https://api.example.org/a.jpg', dict(tile, pictures=0)))
+        q = self.question()
+        self.assertIsNone(plugin_pictures.refused(q, checked, tile))
+        self.assertIn('allows 1', plugin_pictures.refused(q, checked, dict(tile, pictures=1)))
+        self.assertIn('no pictures', plugin_pictures.refused(q, checked, checked['tiles'][0]))
+        self.assertIn('not an address', plugin_pictures.refused(self.question(src='["https://x.org/a","https://api.example.org/b"]'), checked, tile))
+        self.assertIn('does not run', plugin_pictures.refused(q, None, None))
+
+    async def test_a_picture_is_fetched_once_and_a_failure_waits(self):
+        checked = pm.check(manifest(), ENGLISH)
+        tile = dict(checked['tiles'][0], pictures=2, domains=['person'])
+        asked, now = [], [1000.0]
+
+        class Fetcher:
+            check_host = staticmethod(plugin_fetch.Fetcher.check_host)
+
+            async def download_bytes(self, url, headers, network, limit):
+                asked.append(url)
+                if url.endswith('gone.jpg'):
+                    raise OSError('HTTP 404')
+                return b'JPEG' + url.encode()
+        ha = []
+
+        async def ha_picture(path):
+            ha.append(path)
+            return b'PNG'
+        pictures = plugin_pictures.Pictures(Fetcher(), ha_picture, clock=lambda: now[0])
+        self.assertEqual(await pictures.fetch('https://api.example.org/a.jpg', checked, tile), b'JPEGhttps://api.example.org/a.jpg')
+        self.assertEqual(await pictures.fetch('https://api.example.org/a.jpg', checked, tile), b'JPEGhttps://api.example.org/a.jpg')
+        self.assertEqual(asked, ['https://api.example.org/a.jpg'])   # the second time from the cache
+        self.assertEqual(await pictures.fetch('/local/me.png', checked, tile), b'PNG')
+        self.assertEqual(ha, ['/local/me.png'])
+        self.assertIsNone(await pictures.fetch('https://other.org/a.jpg', checked, tile))   # refused: never asked
+        self.assertEqual(len(asked), 1)
+        # A picture that does not come is not asked again within the minute, then it is.
+        self.assertIsNone(await pictures.fetch('https://api.example.org/gone.jpg', checked, tile))
+        self.assertIsNone(await pictures.fetch('https://api.example.org/gone.jpg', checked, tile))
+        self.assertEqual(asked.count('https://api.example.org/gone.jpg'), 1)
+        now[0] += plugin_pictures.FAIL_SECONDS + 1
+        self.assertIsNone(await pictures.fetch('https://api.example.org/gone.jpg', checked, tile))
+        self.assertEqual(asked.count('https://api.example.org/gone.jpg'), 2)
+        # A picture that came is fetched again after a long while.
+        now[0] += plugin_pictures.KEEP_SECONDS
+        await pictures.fetch('https://api.example.org/a.jpg', checked, tile)
+        self.assertEqual(asked.count('https://api.example.org/a.jpg'), 2)
+
+    @unittest.skipUnless(__import__('importlib').util.find_spec('PIL'), 'Pillow')
+    async def test_the_atlas_paints_each_frame_as_asked(self):
+        from PIL import Image
+        import io
+        q = self.question()
+        wide = io.BytesIO()
+        Image.new('RGB', (200, 100), (255, 0, 0)).save(wide, 'PNG')
+        pictures = plugin_pictures.Pictures(None)
+        body = await pictures.atlas(q, [wide.getvalue(), wide.getvalue()])
+        with Image.open(io.BytesIO(body)) as atlas:
+            self.assertEqual(atlas.size, (130, 90))
+            rgb = atlas.convert('RGB')
+            self.assertEqual(rgb.getpixel((30, 45)), (255, 0, 0))     # cover: the frame is filled
+            self.assertEqual(rgb.getpixel((30, 2)), (255, 0, 0))
+            self.assertEqual(rgb.getpixel((100, 45))[0], 255)        # contain: the picture whole, in the middle
+            self.assertEqual(rgb.getpixel((100, 4)), (0x20, 0x20, 0x20))   # on the card's own colour, not black
+            self.assertTrue(all(abs(c - 0x20) <= 2 for c in rgb.getpixel((0, 0))))  # a corner, rounded over the card's colour
+        # Without any picture the frames stay the card's colour.
+        body = await pictures.atlas(q, [None, None])
+        with Image.open(io.BytesIO(body)) as atlas:
+            self.assertEqual(atlas.convert('RGB').getpixel((30, 45)), (0x20, 0x20, 0x20))
 
 
 class Everywhere(unittest.TestCase):
@@ -315,6 +486,37 @@ class LinkFolder(unittest.IsolatedAsyncioTestCase):
         release.clear()
         entry = await service.resolve_link('https://github.com/someone/plugins/tree/main/plugins/bus')
         self.assertEqual(entry.ref, 'm' * 40)
+
+    async def test_its_picture_for_the_plugins_page(self):
+        # store.png beside the manifest, at most a megabyte, is the plugin's picture; the app fetches it when shown.
+        import yaml
+        import plugins as plugin_service
+        tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(tmp.cleanup)
+        service = plugin_service.Plugins(type('Manager', (), {'page_senders': {}})(), Path(tmp.name) / 'data',
+                                         Path(tmp.name) / 'esphome')
+        listing = [{'name': 'README.md', 'size': 10}, {'name': 'store.png', 'size': 300_000}]
+
+        async def github(url, text=False):
+            if url.endswith('/releases/latest'):
+                return {'tag_name': 'v1.0.0'}
+            if '/commits/' in url:
+                return {'sha': 'r' * 40}
+            if url.endswith('tessera-plugin.yaml'):
+                return yaml.safe_dump(manifest())
+            if '/contents/' in url and 'translations' in url:
+                return [{'name': 'en.json'}]
+            if url.endswith('translations/en.json'):
+                return json.dumps(ENGLISH)
+            if '/contents/' in url:
+                return listing
+            return '# Bus'
+        service._github = github
+        entry = await service.resolve_link('https://github.com/someone/tessera-bus')
+        self.assertEqual(service.editor_plugin(entry)['image'], f'api/plugins/{entry.id}/image?v={"r" * 40}')
+        listing[1]['size'] = 2_000_000
+        entry = await service.resolve_link('https://github.com/someone/tessera-bus')
+        self.assertIsNone(entry.image, 'larger than the page takes')
 
 
 class ImageRoom(unittest.TestCase):
@@ -657,6 +859,9 @@ class Queue(unittest.IsolatedAsyncioTestCase):
 
         class FakeManager:
             firmware = FakeFirmware()
+
+            def __init__(self):
+                self.build_queue = BuildQueue(self)
             ha = type('HA', (), {'changed': asyncio.Event(), 'dirty': set()})()
             page_senders = {}
 
@@ -670,7 +875,7 @@ class Queue(unittest.IsolatedAsyncioTestCase):
         for inbox in ('one', 'two', 'three'):
             result = await service.apply(inbox, {'add': [{'id': 'clock_words', 'source': 'folder'}]})
             self.assertTrue(result['built'])
-        await service.worker
+        await service.manager.build_queue.idle()
         self.assertEqual(started, ['one.yaml', 'two.yaml', 'three.yaml'])
         self.assertEqual({i: service.store.get(i, 'clock_words')['state'] for i in ('one', 'two', 'three')},
                          {'one': 'active', 'two': 'active', 'three': 'active'})
@@ -711,6 +916,9 @@ class Queue(unittest.IsolatedAsyncioTestCase):
 
         class FakeManager:
             firmware = FakeFirmware()
+
+            def __init__(self):
+                self.build_queue = BuildQueue(self)
             ha = type('HA', (), {'changed': asyncio.Event(), 'dirty': set()})()
             page_senders = {}
 
@@ -723,10 +931,10 @@ class Queue(unittest.IsolatedAsyncioTestCase):
         service = plugin_service.Plugins(FakeManager(), Path(tmp.name) / 'data', config)
         await service.apply('hall', {'add': [{'id': 'city_words', 'source': 'folder', 'values': {'city': 'Utrecht'},
                                               'parts': ['extra']}]})
-        await service.worker
+        await service.manager.build_queue.idle()
         started.clear()
         await service.apply('hall', {'add': [{'id': 'clock_words', 'source': 'folder'}, {'id': 'city_words', 'source': 'folder'}]})
-        await service.worker
+        await service.manager.build_queue.idle()
         self.assertEqual(started, ['hall.yaml'])
         record = service.store.get('hall', 'city_words')
         self.assertEqual((record['values'], record['parts']), ({'city': 'Utrecht'}, ['extra']))
@@ -778,6 +986,9 @@ class BuildOutcome(unittest.IsolatedAsyncioTestCase):
 
         class FakeManager:
             firmware = FakeFirmware()
+
+            def __init__(self):
+                self.build_queue = BuildQueue(self)
             ha = type('HA', (), {'changed': asyncio.Event(), 'dirty': set()})()
             page_senders = {}
 
@@ -794,27 +1005,50 @@ class BuildOutcome(unittest.IsolatedAsyncioTestCase):
         service, config, started = self.make()
         service.manager.firmware.gate = asyncio.Event()
         await service.apply('hall', {'add': [{'id': 'clock_words', 'source': 'folder'}]})
-        while service.jobs.get('hall', {}).get('state') != 'building':
+        while not service.manager.build_queue.running:
             await asyncio.sleep(0)
         await service.apply('hall', {'add': [{'id': 'calendar_peek', 'source': 'folder'}]})
         service.manager.firmware.gate.set()
-        await service.worker
+        await service.manager.build_queue.idle()
         self.assertEqual(len(started), 2)
         self.assertIn('calendar_peek', started[1])
         self.assertEqual({p: service.store.get('hall', p)['state'] for p in ('clock_words', 'calendar_peek')},
                          {'clock_words': 'active', 'calendar_peek': 'active'})
-        self.assertNotIn('hall', service.jobs)
+        self.assertFalse(service.manager.build_queue.busy())
+
+    async def test_a_plugin_asked_while_the_screen_s_update_waits_comes_with_that_update(self):
+        """A plugin build and an update of one screen are one build (build_queue): the update builds the plugins file
+        too, and its install settles the plugin."""
+        service, config, started = self.make()
+        line = service.manager.build_queue
+        service.manager.firmware.gate = asyncio.Event()
+
+        async def other(build):
+            return 'success' if await line.step({'file': 'desk.yaml', 'action': 'install', 'target': '10.0.0.2'}) else 'failed'
+
+        async def update(build):
+            return 'success' if await line.step({'file': 'hall.yaml', 'action': 'install', 'target': '10.0.0.1'}) else 'failed'
+        line.add('update', 'desk.yaml', other, screen='desk')
+        waiting = line.add('update', 'hall.yaml', update, screen='hall')
+        result = await service.apply('hall', {'add': [{'id': 'clock_words', 'source': 'folder'}]})
+        self.assertEqual(result['queued'], 1)
+        self.assertEqual((waiting.by, waiting.plugins['add']), ('update', ['clock_words']))
+        self.assertEqual(service.store.get('hall', 'clock_words')['state'], 'building')
+        service.manager.firmware.gate.set()
+        await line.idle()
+        self.assertEqual(len(started), 2, 'desk, then hall once')
+        self.assertEqual(service.store.get('hall', 'clock_words')['state'], 'active')
 
     async def test_a_new_plugin_that_fails_leaves_the_file(self):
         service, config, _ = self.make(['failed'])
         await service.apply('hall', {'add': [{'id': 'clock_words', 'source': 'folder'}]})
-        await service.worker
+        await service.manager.build_queue.idle()
         record = service.store.get('hall', 'clock_words')
         self.assertEqual((record['state'], record['reason']), ('failed', 'compile failed'))
         self.assertNotIn('clock_words', (config / 'hall.plugins.yaml').read_text())
         # Trying again puts it back in the file and builds.
         await service.apply('hall', {'add': [{'id': 'clock_words', 'source': 'folder'}]})
-        await service.worker
+        await service.manager.build_queue.idle()
         self.assertEqual(service.store.get('hall', 'clock_words')['state'], 'active')
         self.assertNotIn('reason', service.store.get('hall', 'clock_words'))
         self.assertIn('clock_words', (config / 'hall.plugins.yaml').read_text())
@@ -822,11 +1056,11 @@ class BuildOutcome(unittest.IsolatedAsyncioTestCase):
     async def test_an_update_that_fails_goes_back_to_what_worked(self):
         service, config, _ = self.make(['success', 'failed'])
         await service.apply('hall', {'add': [{'id': 'clock_words', 'source': 'folder', 'parts': []}]})
-        await service.worker
+        await service.manager.build_queue.idle()
         before = service.store.get('hall', 'clock_words')
         await service.apply('hall', {'add': [{'id': 'clock_words', 'source': 'folder', 'parts': ['missing']}]})
         self.assertEqual(service.store.get('hall', 'clock_words')['previous']['version'], before['version'])
-        await service.worker
+        await service.manager.build_queue.idle()
         record = service.store.get('hall', 'clock_words')
         self.assertEqual(record['state'], 'active')
         self.assertEqual(record['failed_update']['reason'], 'compile failed')
@@ -886,39 +1120,65 @@ class BuildOutcome(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(kept['origins'], {'bus/key/all': origin, 'bus/token/hall': origin})
 
 
-class Builds(unittest.TestCase):
-    """Manager.builds: one record per screen for whatever is being built for it, whoever asked, so the editor tracks
-    every build in one place."""
+class Builds(unittest.IsolatedAsyncioTestCase):
+    """Manager.builds: one record per screen for whatever is being built for it, whoever asked (the build line,
+    build_queue), so the editor tracks every build in one place."""
 
-    def builds(self, current=None, queue=(), plugin_jobs=None, job=None):
-        import server
+    def manager(self):
         manager = type('M', (), {})()
-        manager.updates = type('U', (), {'current': current, 'queue': list(queue), 'phase': 'install',
-                                         'resolve': lambda self, screen, profiles=None: (screen['id'] + '.yaml', '10.0.0.1')})()
-        manager.firmware = type('F', (), {'job': job, 'profile_names': lambda self: []})()
-        manager.plugins = type('P', (), {'jobs': plugin_jobs or {}})()
+        manager.updates = type('U', (), {'resolve': lambda self, screen, profiles=None: (screen['id'] + '.yaml', '10.0.0.1')})()
+        manager.firmware = type('F', (), {'job': None, 'logs': [], 'profile_names': lambda self: [],
+                                          'check': lambda self, data: None})()
+        manager.build_queue = BuildQueue(manager)
+        self.gate = asyncio.Event()
+        self.addAsyncCleanup(self.finish, manager)
+        return manager
+
+    async def finish(self, manager):
+        for build in list(manager.build_queue.line):
+            manager.build_queue.drop(build)
+        self.gate.set()
+        await manager.build_queue.idle()
+
+    async def held(self, build):
+        await self.gate.wait()
+        return 'success'
+
+    def builds(self, manager):
+        import server
         screens = [{'id': name} for name in ('hall', 'kitchen', 'desk')]
         return server.Manager.builds(manager, screens, [])
 
-    def test_nothing_on_the_way_is_no_record(self):
-        self.assertEqual(self.builds(), {})
+    async def test_nothing_on_the_way_is_no_record(self):
+        self.assertEqual(self.builds(self.manager()), {})
 
-    def test_every_kind_of_build_once_per_screen(self):
-        running = {'file': 'kitchen.yaml', 'state': 'running', 'stage': 'compile'}
-        out = self.builds(current='hall', queue=['desk'],
-                          plugin_jobs={'kitchen': {'state': 'building', 'add': ['bus']}, 'desk': {'state': 'queued', 'add': ['waste']}},
-                          job=running)
-        self.assertEqual(out['hall'], {'by': 'update', 'state': 'running', 'phase': 'install', 'file': 'hall.yaml', 'stage': None})
-        self.assertEqual(out['kitchen'], {'by': 'plugins', 'state': 'running', 'plugins': ['bus'], 'file': 'kitchen.yaml',
-                                          'stage': 'compile'})
-        # A screen queued for an update and for plugins says the update: it is the one that comes first.
-        self.assertEqual(out['desk']['by'], 'update')
-        self.assertEqual(out['desk']['state'], 'queued')
+    async def test_every_kind_of_build_once_per_screen(self):
+        m = self.manager()
+        line = m.build_queue
+        hall = line.add('update', 'hall.yaml', self.held, screen='hall')
+        hall.phase = 'install'
+        kitchen = line.add('plugins', 'kitchen.yaml', self.held, screen='kitchen', plugins={'add': ['bus']})
+        desk = line.add('update', 'desk.yaml', self.held, screen='desk')
+        # A plugin asked for a screen whose update waits joins that update: one build, which brings the plugin too.
+        self.assertIs(line.add('plugins', 'desk.yaml', self.held, screen='desk', plugins={'add': ['waste']}), desk)
+        out = self.builds(m)
+        self.assertEqual(out['hall'], {'id': hall.id, 'by': 'update', 'state': 'running', 'phase': 'install',
+                                       'file': 'hall.yaml', 'stage': None})
+        self.assertEqual(out['kitchen'], {'id': kitchen.id, 'by': 'plugins', 'state': 'queued', 'plugins': ['bus'],
+                                          'file': 'kitchen.yaml', 'stage': None, 'place': 1})
+        self.assertEqual(out['desk'], {'id': desk.id, 'by': 'update', 'state': 'queued', 'phase': None, 'plugins': ['waste'],
+                                       'file': 'desk.yaml', 'stage': None, 'place': 2})
 
-    def test_an_install_from_firmware_and_usb_counts_too(self):
-        out = self.builds(job={'file': 'desk.yaml', 'state': 'running', 'stage': 'upload'})
-        self.assertEqual(out, {'desk': {'by': 'install', 'state': 'running', 'file': 'desk.yaml', 'stage': 'upload'}})
-        self.assertEqual(self.builds(job={'file': 'desk.yaml', 'state': 'success'}), {})
+    async def test_an_install_from_firmware_and_usb_counts_and_a_check_does_not(self):
+        m = self.manager()
+        m.build_queue.add('update', 'hall.yaml', self.held, screen='hall')
+        check = m.build_queue.attended({'file': 'kitchen.yaml', 'action': 'validate'})
+        install = m.build_queue.attended({'file': 'desk.yaml', 'action': 'install', 'target': '10.0.0.9'})
+        out = self.builds(m)
+        self.assertNotIn('kitchen', out)
+        self.assertEqual((check.by, install.by), ('check', 'install'))
+        self.assertEqual(out['desk'], {'id': install.id, 'by': 'install', 'state': 'queued', 'file': 'desk.yaml',
+                                       'stage': None, 'place': 2})
 
 
 if __name__ == '__main__':

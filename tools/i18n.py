@@ -198,9 +198,11 @@ LINT_KEEP = {
     # Only a log line or the rate limiter's reason shows these.
     # The live view's log of what lies over a live tile (runtime_tiles.h, drawn_over).
     'the top layer', 'the system layer', 'something on the page', 'another screen',
+    # Why a live tile stops streaming (runtime_tiles.h, the live tiles' check before LVGL draws).
+    'its card moved', 'nothing over it',
     # The picture loader's log of a picture's steps (picture_loader.h, note()).
     'not wanted now', 'asks again', 'breaks off for the glass', 'load failed',
-    'history range', 'card button ', 'header navigation', 'media key ', 'screensaver play', 'screensaver mute', 'let go', 'too short (', 'already handled in this contact',
+    'history range', 'card button ', 'header navigation', 'header item', 'media key ', 'screensaver play', 'screensaver mute', 'let go', 'too short (', 'already handled in this contact',
     'same button within the debounce window', 'no runtime tiles', 'setting off', 'screen dimmed', 'card open',
     'detail card open', 'camera open', 'a slider is being dragged', 'settings page open', 'alert showing', 'USB calibration ready; no tile actions',
     'GT911 touch test ready; no tile actions', 'ST7121 touch test ready; no tile actions',

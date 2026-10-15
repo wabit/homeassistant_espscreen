@@ -139,6 +139,8 @@ A wish writes its value into the tile and paints every tile and the open card of
 | `ROW_OPTION` | the option | a select of the light's device (`item`: the select) |
 | `ROW_NUMBER` | the number | a number of the light's device (`item`: the number) |
 | `VACUUM_ROW` | the choice | a vacuum's mode, suction or water row (`item`: `m`, `s` or `w`) |
+| `HUE` | 0-360 | a light's own colour at full saturation (its colour card) |
+| `KELVIN` | kelvin | a light's own white shade (its colour card) |
 
 ### Adding a field
 
@@ -155,8 +157,9 @@ Through a wish today: the tap on a toggling tile, the toggle key of a wide tile,
 slider that switches an off lamp or fan on, the options of a select (card rows and a tile's arrows), a thermostat's and
 a humidifier's modes (card and the tile's mode bar), a thermostat's fan and swing rows, a remote's activities, a
 player's play, pause, mute, shuffle and repeat (card, tile over the whole page, key row and favourite), a vacuum's chips,
-every lamp of a light group's lamp page (on and off, brightness, colour, white shade) and every row of a light's effects
-page (the effect, the device's selects and numbers).
+every lamp of a light group's lamp page (on and off, brightness, colour, white shade), a light's colour and white shade
+on its colour card (`HUE`, `KELVIN`; its brightness row is the tile's slider) and every row of a light's effects page
+(the effect, the device's selects and numbers).
 
 Not a wish, and why:
 

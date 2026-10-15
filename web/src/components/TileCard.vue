@@ -12,6 +12,7 @@ import TileBedside from "./tile/TileBedside.vue";
 import TileClockFace from "./tile/TileClockFace.vue";
 import TileEnergy from "./tile/TileEnergy.vue";
 import TileLine from "./tile/TileLine.vue";
+import TileMeter from "./tile/TileMeter.vue";
 import TilePicture from "./tile/TilePicture.vue";
 import TilePlugin from "./tile/TilePlugin.vue";
 import TileRoundKey from "./tile/TileRoundKey.vue";
@@ -32,8 +33,10 @@ const card = useTileCard(props);
 const kind = computed(() => card.face.kind);
 const CLOCKS = ["analog", "dial", "flip-wide", "flip", "digital"];
 
-function activate() {
+// ⌘, Ctrl or Shift with a click takes the card into the tiles chosen together, or out of them (Keynote, the Finder).
+function activate(e?: MouseEvent | KeyboardEvent) {
   if (props.preview) { if (card.goesTo && props.tile.id) emit("navigate", props.tile.id); }
+  else if (card.live && e && (e.metaKey || e.ctrlKey || e.shiftKey) && props.tile.in === undefined) insp.toggleTile(props.tile);
   else if (card.live) insp.openTile(props.tile);
 }
 // A double click on the name on the card goes to its Name field, as renaming a file in the Finder starts on its name.
@@ -66,10 +69,14 @@ const style = computed(() => {
 });
 
 async function onKey(e: KeyboardEvent) {
-  if (e.key === "Enter" || e.key === " ") { e.preventDefault(); activate(); return; }
+  if (e.key === "Enter" || e.key === " ") { e.preventDefault(); activate(e); return; }
   if (props.preview) return;
-  // Delete or Backspace removes the focused card (app 0.4.32); Undo brings it back.
-  if ((e.key === "Delete" || e.key === "Backspace") && card.live) { e.preventDefault(); removeTile(props.tile); return; }
+  // Delete or Backspace removes the focused card (app 0.4.32); Undo brings it back. Of tiles chosen together, the page's
+  // own key (ScreenView) takes them all.
+  if ((e.key === "Delete" || e.key === "Backspace") && card.live) {
+    if (insp.isPicked(props.tile)) return;
+    e.preventDefault(); removeTile(props.tile); return;
+  }
   // Up and down are a row of the screen's grid, whatever its columns; left and right one cell.
   const grid = card.grid;
   const step = ({ ArrowLeft: -1, ArrowRight: 1, ArrowUp: -grid.columns, ArrowDown: grid.columns } as Record<string, number>)[e.key];
@@ -97,6 +104,7 @@ async function onKey(e: KeyboardEvent) {
     <TileBedside v-if="kind === 'bedside'" :card="card" />
     <TilePlugin v-else-if="kind === 'plugin-live' || kind === 'plugin'" :card="card" />
     <TileEnergy v-else-if="kind === 'energy'" :card="card" />
+    <TileMeter v-else-if="kind === 'meter'" :card="card" />
     <TileClockFace v-else-if="CLOCKS.includes(kind)" :card="card" />
     <TilePicture v-else-if="kind === 'favorite' || kind === 'camera'" :card="card" />
     <TileWatch v-else-if="kind === 'watch'" :card="card" />

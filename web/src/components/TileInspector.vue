@@ -6,6 +6,7 @@ import { computed, ref, watch } from "vue";
 import { t } from "../i18n";
 import { domainInfo, entriesOf, inlineControlKind, pageTarget } from "../model/layout";
 import { titleOf } from "../model/pages";
+import { copyChosen, shortcut } from "../editor/clipboard";
 import PluginTileInspector from "./PluginTileInspector.vue";
 import TileEntityFix from "./TileEntityFix.vue";
 import type { Tile } from "../types";
@@ -13,9 +14,12 @@ import ActionPicker from "./ActionPicker.vue";
 import IconPicker from "./IconPicker.vue";
 import { coverPrimary, hasCoverTilt, withCoverTilt } from "../model/tall-controls";
 import ChoiceField from "./ChoiceField.vue";
+import CalendarSection from "./inspector/CalendarSection.vue";
 import FavoriteSection from "./inspector/FavoriteSection.vue";
 import MapSection from "./inspector/MapSection.vue";
+import MeterSection from "./inspector/MeterSection.vue";
 import NameField from "./inspector/NameField.vue";
+import PrecisionRow from "./inspector/PrecisionRow.vue";
 import TitleButton from "./inspector/TitleButton.vue";
 import PropRow from "./ui/PropRow.vue";
 import Icon from "./ui/Icon.vue";
@@ -27,6 +31,7 @@ import UiMenu from "./ui/UiMenu.vue";
 import UiMenuItem from "./ui/UiMenuItem.vue";
 import UiMenuSeparator from "./ui/UiMenuSeparator.vue";
 import rules from "../model/page-rules.json";
+import { precisionOffered } from "../model/display-precision";
 import { controlChoices, controlHint, displayChoices, displayHint, goesToChoices, goesToHint, offeredChoices, sliderOffered, subChoices,
   tapChoices, tapHint, tileControls, tileDisplay, tiltOffered, type TilePanel } from "../model/tile-options";
 import { useUiStore } from "../stores/ui";
@@ -98,8 +103,15 @@ const mapCard = computed(() => display.value === "map");
 const mapTile = computed(() => props.tile.entity === "screen.map");
 // The energy card (app 0.4.77) is its diagram: no face and no second line to choose, its sensors are Home Assistant's.
 const energyTile = computed(() => props.tile.entity === "screen.energy");
+// A calendar card (firmware 0.56.0) draws its own head and what its room allows: no face or second line to choose, its
+// choices in a section of their own. As a bedside clock's key it is a key like any other.
+const calendarCard = computed(() => domain.value === "calendar" && !key.value);
 // A favourite (app 0.4.42): what it plays and on which speaker, in its own section.
 const favoriteCard = computed(() => display.value === "favorite" && domain.value === "media_player");
+// A sensor's meter (firmware 0.56.0): its look, its range and its colours, in its own sections.
+const meterCard = computed(() => display.value === "meter" && domain.value === "sensor");
+// A sensor's display precision: Home Assistant's own setting of the entity, so the same row on any of its cards, a key's too.
+const precisionShown = computed(() => precisionOffered(props.tile.entity, entities.liveOf(props.tile.entity)));
 // How the energy card shows power along a line: running dots, or calm lines that grow with it and an arrow each.
 const flowChoices = computed(() => offer("flow", rules.energyFlow.map((value) => [value, t(`editor.tile.energy.flow.${value}`)] as [string, string]), current("flow", rules.energyFlow[0])));
 const pictureChoices = (key: "fit" | "overlay") => offer(key, rules.picture[key].map((value) => [value, t(`editor.tile.picture.${key}.${value}`)] as [string, string]), current(key, rules.picture[key][0]));
@@ -204,7 +216,8 @@ const backgroundName = computed(() => inv.inventory.backgrounds?.[props.tile.opt
         <UiMenuItem id="tile-rename" icon="pencil-outline" @select="insp.renameTile(tile)">{{ t("editor.naming.rename") }}</UiMenuItem>
         <UiMenuItem v-if="domain !== 'screen'" icon="database-search-outline" @select="inspect">{{ t("editor.common.read_current_data") }}</UiMenuItem>
         <UiMenuItem v-if="domain !== 'screen'" icon="pencil-outline" @select="insp.entityPickerOpen = true">{{ t("editor.broken.change") }}</UiMenuItem>
-        <UiMenuSeparator v-if="domain !== 'screen'" />
+        <UiMenuItem id="tile-copy" icon="content-copy" :hint="shortcut('C')" @select="copyChosen">{{ t("editor.selection.copy") }}</UiMenuItem>
+        <UiMenuSeparator />
         <UiMenuItem icon="delete-outline" danger hint="⌫" @select="removeTile(tile)">{{ t("editor.common.remove") }}</UiMenuItem>
       </UiMenu>
     </template>
@@ -219,11 +232,12 @@ const backgroundName = computed(() => inv.inventory.backgrounds?.[props.tile.opt
     <Section v-if="key && scr.supports(0, 17, 0)" :title="t('editor.tile.sections.look')">
       <SwitchRow class="key-name-choice" :label="t('editor.tile.keys.name_shown')" :description="t('editor.tile.keys.name_shown_hint')"
         :model-value="tile.options?.overlay !== 'none'" @update:model-value="(on) => setTileOption(tile, 'overlay', on ? 'name' : 'none')" />
+      <PrecisionRow v-if="precisionShown" :entity="tile.entity" />
     </Section>
 
     <!-- What the card shows first, then where it stands, what a finger does to it, and last its icon and colour. -->
     <template v-if="!ui.phone || more">
-    <Section v-if="lookShown || (!bedside && !key)" :title="t('editor.tile.sections.look')">
+    <Section v-if="(lookShown || (!bedside && !key)) && !calendarCard" :title="t('editor.tile.sections.look')">
       <p v-if="energyTile" class="hint">{{ t(scr.supports(0, 47, 0) ? "editor.tile.energy.hint" : "editor.tile.energy.needs_firmware") }}</p>
       <PropRow v-if="energyTile" :label="t('editor.tile.energy.flow.label')" icon="flash" :hint="t('editor.tile.energy.flow.hint')">
         <ChoiceField :choices="flowChoices" :value="current('flow', rules.energyFlow[0])" :tile="tile" preview-key="flow" :aria-label="t('editor.tile.energy.flow.label')" @pick="(v) => setTileOption(tile, 'flow', v)" />
@@ -232,8 +246,9 @@ const backgroundName = computed(() => inv.inventory.backgrounds?.[props.tile.opt
         <ChoiceField :choices="displays" :value="display" :tile="tile" preview-key="display" :aria-label="t('editor.tile.display.label')" @pick="(v) => setTileOption(tile, 'display', v)" />
         <template v-if="shownHint?.warn" #note><small class="help warn">{{ shownHint.text }}</small></template>
       </PropRow>
-      <!-- A bedside clock and its keys have no second line: the clock draws the time, a key its name alone. -->
-      <PropRow v-if="!bedside && !key && !mapCard && !energyTile" :label="t('editor.tile.sub.label')" icon="text-short" :hint="t(`editor.tile.sub.hint_${subKind}`)">
+      <!-- A bedside clock and its keys have no second line: the clock draws the time, a key its name alone. A meter
+           writes its value and name itself. -->
+      <PropRow v-if="!bedside && !key && !mapCard && !energyTile && !meterCard" :label="t('editor.tile.sub.label')" icon="text-short" :hint="t(`editor.tile.sub.hint_${subKind}`)">
         <ChoiceField :choices="subList" :value="subKind" :tile="tile" preview-key="sub" :sample="subSample" :aria-label="t('editor.tile.sub.label')" @pick="pickSubKind" />
         <template v-if="subKind === 'attr' || subKind === 'text'" #note>
           <UiSelect v-if="subKind === 'attr'" class="sub-value" :model-value="subAttribute" :options="subValues.map((value) => [value.key, value.name] as [string, string])"
@@ -244,6 +259,7 @@ const backgroundName = computed(() => inv.inventory.backgrounds?.[props.tile.opt
             @input="writeSubText(($event.target as HTMLInputElement).value)" />
         </template>
       </PropRow>
+      <PrecisionRow v-if="lookShown && precisionShown" :entity="tile.entity" />
       <PropRow v-if="lookShown && display === 'live'" :label="t('editor.tile.refresh.label')" icon="refresh">
         <ChoiceField :choices="refreshChoices" :value="refresh" :aria-label="t('editor.tile.refresh.label')" @pick="(v) => setTileOption(tile, 'refresh', Number(v))" />
       </PropRow>
@@ -258,6 +274,12 @@ const backgroundName = computed(() => inv.inventory.backgrounds?.[props.tile.opt
       </PropRow>
     </Section>
 
+
+    <!-- A sensor's meter (firmware 0.56.0): a ring, a tape or a bar; Home Assistant's range or its own; its colours. -->
+    <MeterSection v-if="lookShown && meterCard" :tile="tile" />
+
+    <!-- A calendar card (firmware 0.56.0): what it shows, its calendars, which events, how far ahead. -->
+    <CalendarSection v-if="calendarCard" :tile="tile" />
 
     <!-- A favourite (app 0.4.42): what it plays, from the player's library, and on which speaker. -->
     <FavoriteSection v-if="lookShown && favoriteCard" :tile="tile" />

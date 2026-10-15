@@ -118,6 +118,8 @@ the editor, and the screen keeps what it was given. Nothing is built for it.
 Every board builds the same fifteen fonts, by id (firmware 0.17.0+): four text steps and the large value (`sublabel`,
 `label`, `sublabel_big`, `headline`, `watch_value`), four digit steps (`clock_digits`, `setpoint_digits`,
 `display_digits`, `bedside_digits`), five icon sizes and the brand wordmark, all in `packages/core.yaml` with `bpp: 4`.
+The icon fonts take their bits from the look (`FONT_ICON_BPP`): 4 in the standard look, 2 in the compact one, which
+halves their flash on the boards with 4 MB.
 Their pixel sizes are the look's (`FONT_*_SIZE` in `packages/looks/standard.yaml` and `compact.yaml`, each a design
 size times `LOOK_SCALE`, the board's density over the look's own), and the two large digit steps are worked out from
 the glass in `packages/looks/shared/digits.yaml`. A new card takes the largest step that fits (for digits
@@ -206,7 +208,7 @@ board:
   where they are: the card's top bar stays at the top, the content under it sits in the middle. A page that
   places itself rather than hanging on `centre` keeps the same rule in its own arithmetic and the same
   condition, "only when more than a finger is left over": the effects page in `place()`, the colour card in
-  `light_controls::open`. One behaviour, one rule, wherever it is written.
+  `light_controls::place`. One behaviour, one rule, wherever it is written.
 
 A card that is a *picture* or a *graph* asks for `overlay_card::picture` or `overlay_card::graph` and is not
 capped: the media card's cover art, a camera's image and a day of a sensor are nicer the bigger they are, and

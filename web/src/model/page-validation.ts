@@ -15,6 +15,13 @@ export function fields(value: any, allowed: string[], required = allowed) {
   if (!value || typeof value !== 'object' || Array.isArray(value) || Object.keys(value).some(k => !allowed.includes(k)) ||
       required.some(k => !(k in value))) fail();
 }
+// A calendar card's choices (firmware 0.56.0), as the page document names them.
+const CALENDAR_FIELDS = ['calendarStyle', 'calendarEntities', 'calendarPlaces', 'calendarWords', 'calendarHideWords', 'calendarAllDay',
+  'calendarTentative', 'calendarPrivate', 'calendarAhead', 'calendarSoon', 'calendarStartView'] as const;
+// ... and its week and booking (the add-on's page_layout.APPEARANCE has them; calendar_feed.validate checks them).
+const CALENDAR_MORE = ['calendarWeekStart', 'calendarHours', 'calendarWeekNumbers', 'calendarBookOn', 'calendarBookPlace', 'calendarBookTitle'] as const;
+// A sensor's meter (firmware 0.56.0, meter.validate), as the page document names it.
+const METER_FIELDS = ['meterStyle', 'meterMin', 'meterMax', 'meterSegments', 'meterColors', 'meterThresholds'] as const;
 const entity = (value: any, domains: string[]) => typeof value === 'string' && value.length <= 120 &&
   matches(/^[a-z0-9_]+\.[a-z0-9_]+$/, value) && domains.includes(value.split('.')[0]);
 const icon = (value: any, none = false) => value === 'auto' || (none && value === 'none') || rules.icons.includes(value);
@@ -70,7 +77,8 @@ export function validatePageShape(layout: PageLayout, plugins = false) {
       fields(tile, ['id', 'content', 'placement', 'appearance', 'interaction', 'children'], ['id', 'content', 'placement', 'appearance', 'interaction']);
       fields(tile.placement, ['row', 'column', 'columns', 'rows']);
       fields(tile.appearance, ['label', 'presentation', 'display', 'icon', 'background', 'historyHours', 'refresh', 'subtitle', 'fit', 'overlay',
-        'mapEntities', 'mapFraming', 'mapDistance', 'mapFollow', 'mapMarkers', 'mapNames', 'mapZones', 'mapStreets', 'mapLook', 'energyFlow'], ['label']);
+        'mapEntities', 'mapFraming', 'mapDistance', 'mapFollow', 'mapMarkers', 'mapNames', 'mapZones', 'mapStreets', 'mapLook', 'energyFlow',
+        ...CALENDAR_FIELDS, ...CALENDAR_MORE, ...METER_FIELDS], ['label']);
       fields(tile.interaction, ['tap', 'inline', 'controls', 'action', 'guard', 'play', 'speaker', 'shuffle', 'repeat'], []);
       const content = tile.content;
       fields(content, ['kind', 'entityId', 'name', 'target', 'plugin', 'tile', 'options'], ['kind']);
@@ -143,6 +151,40 @@ export function validateCardOptions(tile: PageTile, entityId: string, size: stri
     if (value !== undefined && (a.display !== 'map' || !choices.includes(value) || value === choices[0])) fail('normalization');
   // How the energy card shows power along a line: the energy card's own, the default (dots) never stored.
   if (a.energyFlow !== undefined && (entityId !== 'screen.energy' || !rules.energyFlow.includes(a.energyFlow) || a.energyFlow === rules.energyFlow[0])) fail('normalization');
+  // A calendar card (firmware 0.56.0), as calendar_feed.validate checks it: its own choices, a default never stored.
+  if (CALENDAR_FIELDS.some((key) => a[key] !== undefined)) {
+    if (domain !== 'calendar') fail('normalization');
+    const cal = rules.calendar;
+    if (a.calendarStyle !== undefined && (!cal.styles.includes(a.calendarStyle) || a.calendarStyle === cal.styles[0])) fail('normalization');
+    if (a.calendarStartView !== undefined && (!cal.startViews.includes(a.calendarStartView) || a.calendarStartView === cal.startViews[0])) fail('normalization');
+    for (const [list, most, test] of [[a.calendarEntities, cal.calendars, (v: string) => matches(/^calendar\.[a-z0-9_]+$/, v) && v !== entityId && bytes(v) <= 128],
+      [a.calendarPlaces, cal.words, (v: string) => bytes(v) <= 48], [a.calendarWords, cal.words, (v: string) => bytes(v) <= 48],
+      [a.calendarHideWords, cal.words, (v: string) => bytes(v) <= 48]] as [unknown, number, (v: string) => boolean][]) {
+      if (list === undefined) continue;
+      if (!Array.isArray(list) || !list.length || list.length > most || new Set(list).size !== list.length ||
+          list.some((v) => typeof v !== 'string' || !v.trim() || v !== v.trim() || !test(v))) fail('normalization');
+    }
+    for (const [value, fallback] of [[a.calendarAllDay, true], [a.calendarTentative, true], [a.calendarPrivate, false]] as [unknown, boolean][])
+      if (value !== undefined && (typeof value !== 'boolean' || value === fallback)) fail('normalization');
+    const whole = (value: unknown, least: number, most: number) => typeof value === 'number' && Number.isInteger(value) && value >= least && value <= most;
+    if (a.calendarAhead !== undefined && (!whole(a.calendarAhead, 1, cal.ahead[1]) || a.calendarAhead === cal.ahead[0])) fail('normalization');
+    if (a.calendarSoon !== undefined && (!whole(a.calendarSoon, 1, 120))) fail('normalization');
+  }
+  // A sensor's meter (firmware 0.56.0), as meter.validate checks it: with the meter alone, a default never stored.
+  if (METER_FIELDS.some((key) => a[key] !== undefined)) {
+    const m = rules.meter, number = (value: unknown) => typeof value === 'number' && Number.isFinite(value) && Math.abs(value) <= 1e9;
+    if (a.display !== 'meter') fail('normalization');
+    if (a.meterStyle !== undefined && (!m.styles.includes(a.meterStyle) || a.meterStyle === m.styles[0])) fail('normalization');
+    if ((a.meterMin !== undefined || a.meterMax !== undefined) && !(number(a.meterMin) && number(a.meterMax) && a.meterMin! < a.meterMax!)) fail();
+    const segments = a.meterSegments ?? 1;
+    if (a.meterSegments !== undefined && (!m.segments.includes(a.meterSegments) || a.meterSegments === 1)) fail('normalization');
+    const defaults = (m.defaultColors as Record<string, string[]>)[String(segments)];
+    if (a.meterColors !== undefined && (!Array.isArray(a.meterColors) || a.meterColors.length !== segments || a.meterColors.some((name) => !(name in m.colors)))) fail();
+    if (a.meterColors !== undefined && defaults && a.meterColors.join() === defaults.join()) fail('normalization');
+    const values = a.meterThresholds;
+    if (values !== undefined && (!Array.isArray(values) || !values.length || values.length !== segments - 1 || !values.every(number) ||
+        values.some((value, i) => i > 0 && values[i - 1] >= value))) fail();
+  }
   // A favourite (app 0.4.42): what it plays and its speaker, and its own shuffle and repeat (app 0.4.84), with the
   // favourite alone.
   if ((i.play !== undefined || i.speaker !== undefined || i.shuffle !== undefined || i.repeat !== undefined) && a.display !== 'favorite') fail('normalization');

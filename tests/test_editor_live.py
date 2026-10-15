@@ -128,6 +128,56 @@ class Endpoints(unittest.IsolatedAsyncioTestCase):
         await self.client.close()
         self.tmp.cleanup()
 
+    async def test_a_plugins_picture_comes_from_the_app_and_is_kept_a_day(self):
+        # The editor's img-src is 'self': a plugin's store.png goes through the app (plugins.store_image).
+        import io
+        from PIL import Image
+        picture = io.BytesIO()
+        Image.new('RGB', (1280, 720), (10, 20, 30)).save(picture, 'PNG')
+        sha = 'c' * 40
+        manifest = {'id': 'clock', 'version': '1.0.0', 'api': '0.7', 'icon': 'clock-outline', 'maintainer': 'someone',
+                    'license': 'MIT', 'topics': ['time']}
+        self.manager.plugins._take_index({'format': 1, 'plugins': [{
+            'repo': 'https://github.com/someone/tessera-clock', 'path': '.', 'label': 'community', 'image': 'store.png',
+            'release': {'version': '1.0.0', 'sha': sha, 'date': '2026-10-12'}, 'manifest': manifest,
+            'translations': {'en': {'app': {'name': 'Clock', 'summary': 'x'}, 'screen': {}}}}]})
+        kept = self.manager.plugins.data / 'images' / f'clock-{sha}.png'
+        kept.parent.mkdir(parents=True, exist_ok=True)
+        kept.write_bytes(picture.getvalue())
+        response = await self.client.get('/api/plugins/clock/image?v=' + sha)
+        self.assertEqual(response.status, 200)
+        self.assertEqual(response.headers['Content-Type'], 'image/png')
+        self.assertEqual(response.headers['Cache-Control'], 'private, max-age=86400')
+        self.assertEqual(await response.read(), picture.getvalue())
+        self.assertEqual((await self.client.get('/api/plugins/nothing/image')).status, 404)
+
+    async def test_display_precision_is_home_assistants_own_setting(self):
+        # Home Assistant's entity settings (entity-registry-settings-editor.ts): read and set in its registry.
+        import server
+        self.ha.registry = [{'entity_id': 'sensor.t', 'options': {'sensor': {'suggested_display_precision': 2}}}]
+        self.ha.states['sensor.t'] = {'state': '21.456', 'attributes': {'unit_of_measurement': '°C'}}
+        sent = []
+        async def request(kind, **data):
+            sent.append((kind, data))
+            return {'entity_entry': {'entity_id': 'sensor.t', 'options': {'sensor': {'suggested_display_precision': 2,
+                                                                                     'display_precision': data['options']['display_precision']}}}}
+        self.ha.request = request
+        self.ha.display_precision = server.HomeAssistant.display_precision.__get__(self.ha)
+        self.ha.set_display_precision = server.HomeAssistant.set_display_precision.__get__(self.ha)
+        answer = await (await self.client.get('/api/display-precision', params={'entity': 'sensor.t'})).json()
+        self.assertEqual(answer, {'own': None, 'suggested': 2, 'editable': True, 'state': '21.456'})
+        response = await self.client.put('/api/display-precision', json={'entity': 'sensor.t', 'precision': 1}, headers=self.headers)
+        self.assertEqual((await response.json())['own'], 1)
+        self.assertEqual(sent, [('config/entity_registry/update', {'entity_id': 'sensor.t', 'options_domain': 'sensor',
+                                                                  'options': {'suggested_display_precision': 2, 'display_precision': 1}})])
+        # A wrong value or a sensor Home Assistant keeps no settings for: the editor's own error, as JSON.
+        for body in ({'entity': 'sensor.t', 'precision': 7}, {'entity': 'sensor.none', 'precision': 1}, {'entity': 'light.a', 'precision': 1}):
+            response = await self.client.put('/api/display-precision', json=body, headers=self.headers)
+            self.assertEqual(response.status, 400, body)
+            self.assertIn('error', await response.json())
+        # Without the editor's token nothing changes.
+        self.assertEqual((await self.client.put('/api/display-precision', json={'entity': 'sensor.t', 'precision': 0})).status, 403)
+
     async def test_media_preview_hides_source_urls_and_preserves_image_proportions(self):
         import io
         from PIL import Image
@@ -293,6 +343,10 @@ class Endpoints(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(states['sensor.t']['state'], '21.5')
         self.assertEqual(states['sensor.t']['a']['unit_of_measurement'], '°C')
         self.assertIn('word', states['light.a'])
+        # A duration's word is how the screens write it, in hours and minutes (durations.py, wishlist 107).
+        self.manager.ha.states['sensor.left'] = {'state': '0.2', 'attributes': {'device_class': 'duration', 'unit_of_measurement': 'h'}}
+        response = await self.client.get('/api/states?entity=sensor.left')
+        self.assertEqual((await response.json())['states']['sensor.left']['word'], '12m')
 
     async def test_firmware_preview_uses_device_packets_without_saving_or_actions(self):
         from core import Grid

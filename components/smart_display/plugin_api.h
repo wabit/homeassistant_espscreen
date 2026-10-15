@@ -18,6 +18,7 @@
 #include <vector>
 #include <ArduinoJson.h>
 #include "lvgl.h"
+#include "roomy.h"
 #include "theme.h"
 #include "ui_scale.h"
 
@@ -41,15 +42,22 @@ namespace tessera {
 // `topics`, `provides` and `requires.features` (a feature is a promise about one ESPHome id, such as a speaker with id
 // ts_speaker, whichever plugin or board brings it), parts that need a feature, and plugins that come along with the one
 // that needs them. 0.8: the features `camera` (ts_camera) and `camera_sensor`, the first feature only a board brings (its
-// I2C bus as the substitution CAMERA_I2C), and a top bar item's `tone`, the colour of its icon.
-constexpr uint8_t PLUGIN_API_MAJOR = 0, PLUGIN_API_MINOR = 8;
+// I2C bus as the substitution CAMERA_I2C), and a top bar item's `tone`, the colour of its icon. 0.9: Font::DIGITS, the
+// large digits of a climate card's setpoint, and ui::covers(), whether a font has every character of a text;
+// Tone::GOOD, and the tones for a block too (ui::set_fill, ui::tone_color); ui::label is one line high as it says.
+// 0.10: pictures on a tile (ui::picture, ui::set_picture, ui::pictures; the manifest's `pictures` of a tile): places a
+// tile lays out, each with an address the app fetches and paints for exactly that place, through the route every
+// picture of the screen takes (tile_picture.h "parts"); ui::text, a label of several lines; and tap_point(), where the
+// finger of a tile's on_tap was.
+constexpr uint8_t PLUGIN_API_MAJOR = 0, PLUGIN_API_MINOR = 10;
 
 // The screen's fixed fonts, largest first. A tile takes the largest that fits; a plugin brings no font of its own.
 // VALUE is the big number of a watch card, HEADLINE a card's large words, TITLE a card's name, BODY its second line,
 // BODY_LARGE the words on a key, ICON a tile's icon, ICON_SMALL the icons of the top bar. Every text font has the same
 // letters (Latin with the accents of the screen's languages, digits and common signs); the icon fonts have Tessera's
-// icon set only.
-enum class Font : uint8_t { VALUE, HEADLINE, TITLE, BODY_LARGE, BODY, ICON, ICON_SMALL };
+// icon set only. DIGITS (0.9) is the largest: a climate card's setpoint, with the digits and - . , ° % alone, so a
+// tile takes it only for a value ui::covers() and steps down to VALUE for any other (a word, a unit, a letter).
+enum class Font : uint8_t { VALUE, HEADLINE, TITLE, BODY_LARGE, BODY, ICON, ICON_SMALL, DIGITS };
 
 // What a tile gets when its card is made. It is valid during create() only: `name`, `entity` and `options` point into
 // the core's own storage and the JSON document of the call, so a tile copies what it needs into members of its own.
@@ -63,8 +71,28 @@ struct TileContext {
   JsonObjectConst options;   // the tile's options as the editor set them (the manifest's `options`); gone after create()
 };
 
+// Memory for what a plugin keeps (0.10). The memory inside the chip is small and Wi-Fi needs it; a board with PSRAM has
+// megabytes there, and a plain std::string, std::vector or `new` never lands in it (the boards build with
+// CONFIG_SPIRAM_USE_CAPS_ALLOC). Keep texts and lists a tile holds as Text and List: PSRAM first, the ordinary heap on a
+// board without it, and otherwise a std::string and a std::vector: data(), size(), c_str(), +=, == against another Text
+// or a quoted text; roomy::same() compares it with a std::string, roomy::plain() makes one of it, roomy::text() the
+// other way. ui::set_text takes a std::string: ui::set_text(label, roomy::plain(text)), or keep a short text you show in
+// a char array. A Tile and a Card are made in PSRAM by themselves (their operator new), so fixed
+// members (numbers, char arrays, pointers) are there already.
+using Text = roomy::Text;
+template <class T> using List = roomy::List<T>;
+// The operator new of a plugin's objects: PSRAM first; aborts only when no memory has room, as `new` does.
+struct InPsram {
+  static void *operator new(size_t size) {
+    void *p = roomy::allocate(size);
+    if (!p) std::abort();
+    return p;
+  }
+  static void operator delete(void *p) { roomy::release(p); }
+};
+
 // A tile type's card. One object per card on the glass; a page switch on a board without PSRAM makes a new one.
-class Tile {
+class Tile : public InPsram {
  public:
   virtual ~Tile() = default;
   // Make the parts, in context.parent. Called once per card, before anything else.
@@ -97,7 +125,7 @@ struct CardContext {
 // One is open at a time; it closes with Back, standby, Back to page 1 or another card, as every card does. A card may
 // close itself (tessera::close_card) or open another (tessera::open_card) from any of its own calls: it leaves the
 // glass at once, gets no call after that one, and is deleted only once that call has returned.
-class Card {
+class Card : public InPsram {
  public:
   virtual ~Card() = default;
   virtual void open(const CardContext &context) = 0;
@@ -160,8 +188,19 @@ class SettingsPage {
 // What an item of a plugin in the top bar shows now: an icon of Tessera's set and a short text, or nothing.
 // The colour of a top bar item's icon (0.8), by what it means: the core picks the colour, in both looks. NORMAL is the
 // bar's own grey; ACCENT the screen's blue (it listens, it is on); BUSY Home Assistant's amber (it works on something);
-// ALERT its red (a camera that streams, something that went wrong).
-enum class Tone : uint8_t { NORMAL, ACCENT, BUSY, ALERT };
+// ALERT its red (a camera that streams, something that went wrong). GOOD (0.9) its green (a level that is fine, a full
+// battery). The same tones colour a tile's labels (ui::set_tone) and its blocks (ui::set_fill), a bar or a dot.
+enum class Tone : uint8_t { NORMAL, ACCENT, BUSY, ALERT, GOOD };
+// How a picture fills its place (0.10): COVER fills the place and cuts away what is over (a poster in a poster's
+// frame), CONTAIN shows the whole picture within it, on the card's own colour (a logo, a map).
+enum class Fit : uint8_t { COVER, CONTAIN };
+// How a picture turns in its place (0.10), as the covers beside the middle one of a cover flow turn to face it: the app
+// draws the whole picture in perspective within the place, its near edge the place's height and its far edge 70 % of
+// it. LEFT faces the left (its left edge far: a cover right of the middle), RIGHT faces the right (a cover left of it).
+enum class Turn : uint8_t { NONE, LEFT, RIGHT };
+// A reflection under a picture (0.10, ui::set_picture's `mirror`): it takes this share of the picture's height under it,
+// within the place, so a place for a picture of height h with its reflection is h * (100 + MIRROR_PERCENT) / 100 high.
+constexpr int MIRROR_PERCENT = 30;
 struct BarItem {
   bool shown = false;
   uint32_t icon = 0;         // a codepoint of Tessera's icon set (0xF00E7), 0 for none
@@ -287,6 +326,13 @@ bool open_card(const char *plugin_id, const char *card, const std::string &entit
                const std::string &title = "");
 // Close the card that is open, as Back does.
 void close_card();
+// Where the finger of a tile's on_tap was (0.10), in the pixels of the tile's drawing area (TileContext::parent: 0,0
+// its top left, width and height as create() got them), so a tile with a list or a row of posters knows which one was
+// tapped. Valid during on_tap; -1,-1 when the screen could not say.
+struct Point {
+  int x = -1, y = -1;
+};
+Point tap_point();
 // Ask the app something on this plugin's behalf: a Home Assistant command its manifest names under
 // permissions.ha_commands, such as {"ask": "call_service:calendar.get_events", "data": {"entity_id": "calendar.waste",
 // "duration": {"days": 28}}}. Returns the number the answer carries as "re" (0 when it could not be sent: no app, or a
@@ -311,7 +357,11 @@ inline lv_color_t color(theme::Role role) { return theme::color(role); }
 const lv_font_t *font(Font font);
 inline int line_height(Font f) { const lv_font_t *face = font(f); return face ? lv_font_get_line_height(face) : 0; }
 int text_width(const std::string &text, Font font);
-// A label in `parent`, in this font and colour, one line, cut with dots when it is too long for the width it gets.
+// True when the font has a glyph for every character of `text` (0.9): a character it lacks draws as nothing.
+bool covers(const std::string &text, Font font);
+// A label in `parent`, in this font and colour, one line, cut with dots when it is too long for the width it gets. It is
+// one line of its font high (0.9; before, LVGL's own height let a long text wrap onto a second line), and set_font keeps
+// it so; a label given a height of its own keeps that.
 lv_obj_t *label(lv_obj_t *parent, Font font, theme::Role role = theme::INK);
 // Set what a label shows, its font or its colour only when that differs (a repaint that finds nothing new is free).
 void set_text(lv_obj_t *label, const std::string &text);
@@ -319,10 +369,47 @@ void set_font(lv_obj_t *label, Font font);
 void set_color(lv_obj_t *label, theme::Role role);
 // A label in a tone (0.8), the colours a top bar item's icon takes; NORMAL takes `normal`.
 void set_tone(lv_obj_t *label, Tone tone, theme::Role normal);
+// A block's fill in a tone (0.9): a bar, a dot or a badge in the colour of what it means, in both looks; NORMAL takes
+// `normal`. Changed only when it differs, as set_color.
+void set_fill(lv_obj_t *block, Tone tone, theme::Role normal);
+// The colour of a tone in this look (0.9), for a part ui::set_tone and set_fill do not reach (a line of a chart).
+lv_color_t tone_color(Tone tone, theme::Role normal);
 // A rounded block (a line number's badge, a bar): no border, the radius of a key.
 lv_obj_t *block(lv_obj_t *parent, theme::Role fill);
 // The UTF-8 of an icon of Tessera's set by its codepoint (0xF0B5E), for a label in Font::ICON or ICON_SMALL.
 std::string icon(uint32_t codepoint);
+// A label of several lines (0.10): wraps at its width and is cut with dots at its height, both the plugin's to set
+// (lv_obj_set_size); for a description, a sentence, a title that may take two lines. ui::set_text and the rest apply.
+lv_obj_t *text(lv_obj_t *parent, Font font, theme::Role role = theme::INK);
+
+// ---- Pictures on a tile (0.10) ----
+// A tile lays out places for pictures and names an address for each; the core does the rest, the way every picture
+// of the screen comes: the card asks the app for all its places as one picture (an atlas of their frames, one
+// download, one entry in the picture store), the app fetches each address once, cuts or fits it to its place, and the
+// card draws each place its frame. Pictures come only while the tile is on the glass or on a kept page, and leave the
+// store when the tile does. An address is on a host the plugin's manifest names under permissions.network, or a
+// picture of Home Assistant's own for a tile of an entity (its entity_picture: /api/image/serve/..., /api/image_proxy/...,
+// /local/...); the app fetches nothing else. The manifest's `pictures` of the tile says how many places it has at most.
+// Whether this screen shows pictures at all: a board without the memory for them (the CYD, the Waveshare 3.5-inch,
+// the Hosyond 4-inch) shows none, and a tile lays itself out without the places, as it does without a picture.
+bool pictures();
+// A place for a picture in `parent`, sized and placed by the plugin as any object (lv_obj_set_size, lv_obj_set_pos):
+// a soft block (theme::TRACK) until its picture is there. Its corners are a key's; a radius of the plugin's own
+// (lv_obj_set_style_radius) is taken over by the picture. Call it in create(), as every object.
+lv_obj_t *picture(lv_obj_t *parent);
+// The picture a place shows, by its address, COVER or CONTAIN (Fit). The same address again does nothing (call it on
+// every on_state for free); another address asks the app again; "" takes the picture away and shows the block. A
+// place that lies outside the card, or has no size, gets no picture.
+void set_picture(lv_obj_t *place, const std::string &url, Fit fit = Fit::COVER);
+// The same, turned in perspective (Turn) and with a reflection fading out under it (`mirror`: the place's lower part,
+// MIRROR_PERCENT of the picture's height, holds it). Places may overlap: they are layers, a place made later lies over
+// one made earlier, and the app paints them so (a cover flow, a stack of photos). An older app draws them flat.
+void set_picture(lv_obj_t *place, const std::string &url, Fit fit, Turn turn, bool mirror = false);
+// Slide every place of the tile `dx` pixels sideways over `ms` (0.10), and keep them there until the tile's next
+// picture is here: then they are back where the tile laid them out, with it, in the same frame. Call it beside the
+// set_picture calls of a change (a cover flow that turns), so the change shows which way it goes while the next picture
+// comes. Call it in a call of the tile (on_tap, on_tick).
+void slide_pictures(int dx, uint32_t ms = 300);
 }  // namespace ui
 
 }  // namespace tessera

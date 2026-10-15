@@ -28,6 +28,7 @@ import entity_settings
 import plugin_fetch
 import plugin_likes
 import plugin_manifest as pm
+import plugin_pictures
 import tile_icons
 from i18n import t
 from plugin_store import PluginSecrets, PluginStore
@@ -53,6 +54,13 @@ GITHUB_API = 'https://api.github.com/repos/{owner}/{repo}'
 GITHUB_REPOSITORY = 'https://api.github.com/repositories/{id}'
 GITHUB_RAW = 'https://raw.githubusercontent.com/{owner}/{repo}/{ref}/{path}'
 FOLDER = 'tessera-plugins'
+# A plugin's picture on the Plugins page: store.png beside its manifest, made with the plugins repository's
+# tools/store_image.py or by hand (its docs/PUBLISHING.md). The app fetches it at the plugin's commit and serves it to
+# the editor itself, as the editor shows no picture from another address.
+STORE_IMAGE = 'store.png'
+STORE_IMAGE_MAX = 1024 * 1024
+STORE_IMAGE_SIZE = (2560, 1440)   # the largest it takes; the tool makes 1280 x 720
+PNG_SIGNATURE = b'\x89PNG\r\n\x1a\n'
 PLUGIN_ICON = 'F0A66'         # puzzle-outline, for a plugin whose icon is not in Tessera's set
 X_BUDGET = 2600               # bytes of a tile's data on the wire: the message carries more and stays under 4 KB
 # How far lists are shortened, each to the same length from the end, until an answer or a tile's entity fits its bytes:
@@ -155,12 +163,29 @@ def trimmed(data):
     return data
 
 
+def store_image_ok(body):
+    """Whether `body` is a PNG the Plugins page takes: the signature, a header Pillow reads, and at most STORE_IMAGE_SIZE.
+    Only the header is read, so a picture that claims an enormous size is refused before anything is decoded."""
+    if not body or len(body) > STORE_IMAGE_MAX or not body.startswith(PNG_SIGNATURE):
+        return False
+    try:
+        from io import BytesIO
+        from PIL import Image
+        with Image.open(BytesIO(body)) as image:
+            width, height = image.size
+            return image.format == 'PNG' and 0 < width <= STORE_IMAGE_SIZE[0] and 0 < height <= STORE_IMAGE_SIZE[1]
+    except Exception:
+        return False
+
+
 class Entry:
     """One plugin the app knows, from the index, a snapshot of an installed release, or a folder."""
 
     def __init__(self, raw, translations, readme, source, label, repo=None, path='.', ref=None, folder=None, status='ok',
-                 repo_id=None, branch=None, date=None, changelog=None):
+                 repo_id=None, branch=None, date=None, changelog=None, image=None):
         self.raw, self.translations, self.readme = raw, translations, readme
+        # STORE_IMAGE when the plugin has a picture for the Plugins page, else None.
+        self.image = STORE_IMAGE if image == STORE_IMAGE else None
         self.source, self.label, self.repo, self.path, self.ref = source, label, repo, path or '.', ref
         self.folder, self.status = folder, status
         # GitHub's number of the repository (it follows a rename, and a new repository under an old name has another),
@@ -196,7 +221,7 @@ class Entry:
     def snapshot(self):
         return {'raw': self.raw, 'translations': self.translations, 'readme': self.readme, 'source': self.source,
                 'label': self.label, 'repo': self.repo, 'path': self.path, 'ref': self.ref, 'repo_id': self.repo_id,
-                'branch': self.branch, 'date': self.date, 'changelog': self.changelog}
+                'branch': self.branch, 'date': self.date, 'changelog': self.changelog, 'image': self.image}
 
 
 def read_folder(folder):
@@ -214,7 +239,8 @@ def read_folder(folder):
         for path in sorted(folder.glob(f'{name}*.md')):
             language = path.stem.split('.', 1)[1] if '.' in path.stem else 'en'
             into[language] = path.read_text(encoding='utf-8')[:64 * 1024]
-    return Entry(raw, translations, readme, 'folder', 'test', folder=folder, changelog=changelog)
+    return Entry(raw, translations, readme, 'folder', 'test', folder=folder, changelog=changelog,
+                 image=STORE_IMAGE if (folder / STORE_IMAGE).is_file() else None)
 
 
 class Plugins:
@@ -231,6 +257,8 @@ class Plugins:
         self.secrets.adopt(installed)
         self.liker = plugin_likes.Likes(Path(data_dir) / 'plugin_likes.json')
         self.fetcher = plugin_fetch.Fetcher(f'Tessera/{core.FIRMWARE_VERSION} (+plugins)', session_factory)
+        # The pictures of plugin tiles (plugin API 0.10), through the fetcher's session, or Home Assistant's own.
+        self.pictures = plugin_pictures.Pictures(self.fetcher, lambda path: self.manager.ha.entity_picture(path))
         self.index = {}             # id -> Entry, from index.json
         self.index_state = {'at': None, 'error': None, 'etag': None, 'checked': 0.0, 'blocked': [], 'featured': []}
         # likes.json: how many like each plugin; `fresh`: the website's own answer to a like from this app, which counts
@@ -241,9 +269,6 @@ class Plugins:
         self.snapshots = {}         # (id, ref) -> Entry of an installed release
         self.links = {}             # id -> Entry added with a link (a release of any repository, or a branch to test)
         self.links_checked = 0.0    # when refresh_links last asked for the linked repositories' newest releases
-        self.jobs = {}              # inbox -> what its waiting or running build adds and removes, and its state
-        self.queue = []             # the screens that wait for a build, in the order they were asked
-        self.worker = None
         self.http = None            # the session that reads the index: never the one that holds Home Assistant's token
         self.ready = False
         self._load_cached_index()
@@ -275,7 +300,8 @@ class Plugins:
                 entry = Entry(item['manifest'], item.get('translations') or {}, item.get('readme') or {}, 'index', label,
                               repo=repo, path=item.get('path') or '.', ref=release.get('sha'), status=item.get('status', 'ok'),
                               repo_id=item.get('repo_id'), date=release.get('date'),
-                              changelog=item.get('changelog') if isinstance(item.get('changelog'), dict) else None)
+                              changelog=item.get('changelog') if isinstance(item.get('changelog'), dict) else None,
+                              image=item.get('image'))
             except (pm.ManifestError, KeyError, TypeError, ValueError) as error:
                 LOG.warning('Index plugin %s skipped: %s', (item or {}).get('id') if isinstance(item, dict) else '?', error)
                 continue
@@ -354,7 +380,7 @@ class Plugins:
                 self.snapshots[key] = Entry(data['raw'], data['translations'], data.get('readme') or {}, data['source'],
                                             data['label'], repo=data.get('repo'), path=data.get('path'), ref=data.get('ref'),
                                             repo_id=data.get('repo_id'), branch=data.get('branch'), date=data.get('date'),
-                                            changelog=data.get('changelog'))
+                                            changelog=data.get('changelog'), image=data.get('image'))
             except (OSError, ValueError, KeyError, pm.ManifestError):
                 return None
         return self.snapshots[key]
@@ -574,10 +600,12 @@ class Plugins:
                     translations[name[:-5]] = json.loads(await self._github(raw('translations/' + name), text=True))
                 except ValueError:
                     continue
-        readme, changelog = {}, {}
+        readme, changelog, image = {}, {}, None
         files = await self._github(f'{api}/contents/{path if path != "." else ""}?ref={sha}')
         for item in files if isinstance(files, list) else []:
             name = item.get('name', '')
+            if name == STORE_IMAGE and isinstance(item.get('size'), int) and item['size'] <= STORE_IMAGE_MAX:
+                image = STORE_IMAGE
             found = re.fullmatch(r'(README|CHANGELOG)(?:\.([a-z]{2}(?:-[A-Za-z]{2})?))?\.md', name)
             if found:
                 into = readme if found.group(1) == 'README' else changelog
@@ -586,7 +614,7 @@ class Plugins:
         label = 'test' if wanted else ('tessera' if repo_url.lower().startswith(TESSERA_OWNER.lower()) else 'community')
         try:
             entry = Entry(manifest, translations, readme, 'branch' if wanted else 'link', label, repo=repo_url, path=path,
-                          ref=sha, repo_id=repo_id, branch=wanted, changelog=changelog)
+                          ref=sha, repo_id=repo_id, branch=wanted, changelog=changelog, image=image)
         except pm.ManifestError as error:
             raise ValueError(t('addon.errors.plugins.manifest', why=str(error)[:200]))
         self.links[entry.id] = entry
@@ -676,6 +704,9 @@ class Plugins:
                             'network': manifest['permissions']['network'],
                             'read_entities': manifest['permissions']['read_entities']},
             'privacy': manifest.get('privacy'), 'readme': entry.readme, 'changelog': entry.changelog,
+            # Its picture for the Plugins page, through the app (store_image), named after its commit so a browser keeps
+            # it until the plugin changes.
+            'image': self.image_url(entry),
             'languages': pm.complete_languages(manifest, entry.translations),
             'inputs': [{'id': i['id'], 'kind': i['kind'], 'scope': i['scope'], 'label': words(i['label']),
                         'hint': words(i['hint']), 'domains': i['domains']} for i in manifest['inputs']],
@@ -690,7 +721,9 @@ class Plugins:
                        **({'entities': self.entities_with(tile['domains'], tile['has_attributes'])}
                           if tile.get('has_attributes') else {}),
                        'options': [option(o) for o in tile['options']],
-                       'example': words(tile.get('example')), 'preview': bool(tile.get('preview'))}
+                       'example': words(tile.get('example')), 'preview': bool(tile.get('preview')),
+                       # Places for pictures on the tile (0.10), shown only where the screen has the memory for them.
+                       'pictures': tile['pictures']}
                       for tile in manifest['tiles']],
             'settings': [{'key': s['key'], 'label': words(s['label'])} for s in manifest['settings']],
             'cards': [{'id': c['id'], 'name': words(c['name'])} for c in manifest['cards']],
@@ -719,15 +752,74 @@ class Plugins:
             listed[entry.id] = entry
         return listed
 
+    def image_url(self, entry):
+        """The editor's address of a plugin's picture, or None: named after its commit (a folder: the file's time), so a
+        new picture is a new address."""
+        if not entry.image:
+            return None
+        version = entry.ref
+        if entry.folder is not None:
+            try:
+                version = int((Path(entry.folder) / STORE_IMAGE).stat().st_mtime)
+            except OSError:
+                return None
+        return f'api/plugins/{entry.id}/image?v={version or 0}'
+
+    async def store_image(self, plugin_id):
+        """The PNG of a listed plugin's picture for the Plugins page, or None: from its folder, or fetched from GitHub at
+        the plugin's commit and kept under data/images (one per plugin), checked to be a PNG of a size the page takes."""
+        entry = self.listed().get(plugin_id)
+        if entry is None or not entry.image:
+            return None
+        if entry.folder is not None:
+            try:
+                body = (Path(entry.folder) / STORE_IMAGE).read_bytes()
+            except OSError:
+                return None
+            return body if store_image_ok(body) else None
+        found = GITHUB_LINK.match(entry.repo or '')
+        if not found or not re.fullmatch(r'[0-9a-f]{40}', entry.ref or ''):
+            return None
+        kept = self.data / 'images' / f'{entry.id}-{entry.ref}.png'
+        try:
+            return kept.read_bytes()
+        except OSError:
+            pass
+        base = '' if entry.path in ('', '.') else entry.path.strip('/') + '/'
+        url = GITHUB_RAW.format(owner=found.group(1), repo=found.group(2), ref=entry.ref, path=base + STORE_IMAGE)
+        import aiohttp
+        try:
+            if self.http is None or self.http.closed:
+                self.http = aiohttp.ClientSession(timeout=aiohttp.ClientTimeout(total=15),
+                                                  headers={'User-Agent': self.fetcher.user_agent})
+            async with self.http.get(url) as response:
+                if response.status != 200:
+                    return None
+                body = bytes(await read_whole(response, STORE_IMAGE_MAX))
+        except (aiohttp.ClientError, asyncio.TimeoutError, ValueError) as error:
+            LOG.info('Plugin %s: picture not read (%s)', entry.id, error)
+            return None
+        if not store_image_ok(body):
+            LOG.info('Plugin %s: %s is not a PNG the Plugins page takes', entry.id, STORE_IMAGE)
+            return None
+        try:
+            kept.parent.mkdir(parents=True, exist_ok=True)
+            for old in kept.parent.glob(f'{entry.id}-*.png'):
+                old.unlink(missing_ok=True)
+            kept.write_bytes(body)
+        except OSError as error:
+            LOG.warning('Plugin %s: picture not kept (%s)', entry.id, error)
+        return body
+
     def settle(self):
         """What a plugin's record says squared with what its screen runs, for a screen without a build on its way: a
         plugin the screen reports at that version is active (built elsewhere: ESPHome Device Builder, a computer), and one
         still building without a build is failed (the app restarted during it), so the editor offers to build again
         instead of waiting for ever."""
         running = self.running()
+        line = getattr(self.manager, 'build_queue', None)
         for inbox, records in self.store.everywhere().items():
-            job = (self.jobs.get(inbox) or {}).get('state')
-            if job in ('queued', 'building'):
+            if line and line.on_the_way(screen=inbox):
                 continue
             reported = {item['id']: item.get('version') for item in running.get(inbox) or []}
             for record in records:
@@ -1137,64 +1229,33 @@ class Plugins:
             # A screen built from its own YAML: the app cannot build it, so the page shows the file and the line.
             return {'own_yaml': True, 'file': f'{screen.get("node") or "screen"}.plugins.yaml', 'content': text,
                     'line': self.attach_line(f'{screen.get("node") or "screen"}.yaml')}
-        # One build at a time, in the order asked: ticking three screens on the Plugins page builds them one after the
-        # other. A screen asked again while it waits builds once, with everything asked for it; one asked while its build
-        # runs builds once more after it (`next`), since that build may have read its YAML before this change.
-        added = [c['record']['id'] for c in changes]
-        job = self.jobs.get(inbox)
-        if job and job['state'] == 'building':
-            later = job.setdefault('next', {'add': [], 'remove': []})
-            later['add'] = sorted(set(later['add']) | set(added))
-            later['remove'] = sorted(set(later['remove']) | set(removes))
-            if inbox not in self.queue:
-                self.queue.append(inbox)
-        elif job:
-            job['add'] = sorted(set(job['add']) | set(added))
-            job['remove'] = sorted(set(job['remove']) | set(removes))
-        else:
-            self.jobs[inbox] = {'add': added, 'remove': list(removes), 'state': 'queued',
-                                'profile': profile, 'host': host, 'asked': int(time.time())}
-            self.queue.append(inbox)
-        if self.worker is None or self.worker.done():
-            self.worker = asyncio.get_running_loop().create_task(self._build_queue())
+        # The screen's build waits its turn in the app's one build line (build_queue, docs/BUILDS.md): ticking three
+        # screens on the Plugins page builds them one after the other. A screen asked again while its build waits builds
+        # once, with everything asked for it, and so does one whose update waits; one asked while its build runs builds
+        # once more after it, since that build may have read its YAML before this change.
+        line = self.manager.build_queue
+        build = line.add('plugins', profile, self._build, screen=inbox, target=host,
+                         plugins={'add': [c['record']['id'] for c in changes], 'remove': list(removes)})
+        if self._built not in build.ends:
+            build.ends.append(self._built)
         self.manager.notify()
-        return {'written': True, 'built': True, 'queued': self.queue.index(inbox) if inbox in self.queue else 0}
+        return {'written': True, 'built': True, 'queued': line.place(build)}
 
-    async def _build_queue(self):
-        """Build the screens that wait, one at a time, each when the app's one build slot is free."""
-        firmware = self.manager.firmware
-        while self.queue:
-            while firmware.task and not firmware.task.done():
-                await asyncio.sleep(2)
-            inbox = self.queue.pop(0)
-            job = self.jobs.get(inbox)
-            if not job:
-                continue
-            if job['state'] == 'building':   # asked again while it built: its next build waits behind the others
-                self.queue.append(inbox)
-                await asyncio.sleep(0)
-                continue
-            job.update(state='building', started=int(time.time()))
-            self.manager.notify()
-            try:
-                firmware.start({'file': job['profile'], 'action': 'install', 'target': job['host']})
-                await firmware.task
-                ok = (firmware.job or {}).get('state') == 'success'
-                reason = None if ok else build_reason(getattr(firmware, 'logs', None))
-            except Exception as error:   # refused before it started (a file that went, an address that is wrong)
-                ok, reason = False, str(error)[:200]
-            later = job.get('next')
-            # A plugin asked for again while this build ran is settled by the build after it, not by this one.
-            self._settle_build(inbox, [p for p in job['add'] if not later or p not in later['add']], ok, reason)
-            if later:
-                self.jobs[inbox] = {'add': later['add'], 'remove': later['remove'], 'state': 'queued', 'profile': job['profile'],
-                                    'host': job['host'], 'asked': int(time.time())}
-                if inbox not in self.queue:
-                    self.queue.append(inbox)
-            else:
-                self.jobs.pop(inbox, None)
-            self.manager.notify()
-            self.manager.ha.changed.set()
+    async def _build(self, build):
+        """A plugin build's turn: the screen's firmware with its plugins file, installed over Wi-Fi."""
+        ok = await self.manager.build_queue.step({'file': build.file, 'action': 'install', 'target': build.target})
+        return 'success' if ok else 'failed'
+
+    def _built(self, build):
+        """What the end of a build of this screen (a plugin build, or the update it became one with) means for the
+        plugins it brought: whether the screen's firmware with them went on. A plugin asked for again while it built is
+        settled by the build that waits for it."""
+        later = self.manager.build_queue.waiting(build.file)
+        again = set(later.plugins['add']) if later else set()
+        ok = build.installed
+        reason = None if ok else ('interrupted' if build.state == 'interrupted'
+                                  else build_reason(build.logs) if build.logs else str(build.reason or build.state))
+        self._settle_build(build.screen, [p for p in build.plugins['add'] if p not in again], ok, reason)
 
     def _settle_build(self, inbox, added, ok, reason):
         """What a build's end means for the plugins it added. Built: they are active and what came before is forgotten.

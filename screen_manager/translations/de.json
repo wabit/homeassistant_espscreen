@@ -586,6 +586,43 @@
     },
     "plugin": {
       "missing": "Plugin fehlt"
+    },
+    "calendar": {
+      "free": "Frei",
+      "busy": "Belegt",
+      "starts_soon": "Beginnt gleich",
+      "private": "Belegt",
+      "all_day": "Ganztägig",
+      "today": "Heute",
+      "tomorrow": "Morgen",
+      "nothing": "Nichts geplant",
+      "nothing_more": "Diese Woche nichts mehr",
+      "until": "Bis {x}",
+      "next": "Nächster {x}",
+      "left": "Noch {x}",
+      "in": "In {x}",
+      "more": "{x} weitere",
+      "earlier": "{x} früher",
+      "later": "{x} später",
+      "more_week": "{x} weitere diese Woche",
+      "days_view": "{x} Tage",
+      "views": [
+        "Demnächst",
+        "Tag",
+        "Woche",
+        "Monat"
+      ],
+      "view_notes": [
+        "Was gerade läuft, dann die nächsten Termine",
+        "Ein Tag, ein Tippen auf die Leiste wählt ihn",
+        "Tage nebeneinander, Stunden nach unten",
+        "Der Monat auf einen Blick, ein Tippen öffnet einen Tag"
+      ],
+      "today_key": "Heute",
+      "booking": "Wird gebucht…",
+      "calendars": "Kalender",
+      "also": "+{x} jetzt",
+      "booked": "Am Bildschirm gebucht"
     }
   },
   "addon": {
@@ -707,6 +744,7 @@
         "no_small_slider": "{name} hat in Home Assistant nichts, was ein kleiner Schieberegler ändern kann.",
         "no_graph": "{name} hat keine Zahlen für ein Diagramm.",
         "no_forecast": "{name} hat in Home Assistant keine Tagesvorhersage.",
+        "no_meter": "{name} hat keine Zahlen für eine Messanzeige.",
         "no_control": "Home Assistant bietet diese direkte Steuerung für {name} nicht an."
       },
       "alerts": {
@@ -755,7 +793,8 @@
         "build_first": "Erstelle zuerst die Firmware; der Download erscheint, wenn sie fertig ist.",
         "unknown_action": "Unbekannte Firmware-Aktion.",
         "host": "Gib die IP-Adresse oder den Hostnamen des gewünschten Bildschirms ein.",
-        "grid": "Wähle ein Raster, das dieser Bildschirm annimmt."
+        "grid": "Wähle ein Raster, das dieser Bildschirm annimmt.",
+        "build_gone": "Dieser Build ist nicht mehr bekannt. Die neuesten Builds stehen unter Firmware & USB."
       },
       "updates": {
         "automatic": "Wähle für automatische Updates an oder aus.",
@@ -767,7 +806,9 @@
         "no_profile": "Kein ESPHome-Profil für diesen Bildschirm gefunden. Prüfe den Namen im ESPHome-Ordner.",
         "ip_unknown": "IP-Adresse unbekannt. Gib sie einmal ein; neue Firmware meldet sie danach selbst.",
         "all_updated": "Alle erreichbaren Bildschirme sind schon aktuell.",
-        "reinstall_dev": "Dieselbe Firmware erneut installieren geht nur im Dev-Kanal."
+        "reinstall_dev": "Dieselbe Firmware erneut installieren geht nur im Dev-Kanal.",
+        "all_on_the_way": "Jeder Bildschirm mit einem Update hat es schon auf dem Weg.",
+        "nothing_to_reinstall": "Gerade lässt sich kein Bildschirm neu installieren: Jeder ist offline, schon auf dem Weg oder hat kein Profil in dieser App."
       },
       "remove": {
         "not_allowed": "Diese App darf keine Integration aus Home Assistant entfernen. Entferne den Bildschirm in Home Assistant selbst, unter Einstellungen → Geräte & Dienste.",
@@ -870,7 +911,8 @@
       },
       "extras": {
         "request": "Diese Änderung eines Extras ist auf diesem Bildschirm nicht möglich."
-      }
+      },
+      "display_precision_unregistered": "Home Assistant speichert keine Einstellungen für diesen Sensor, weil er keine eindeutige ID hat. Seine Anzeigegenauigkeit lässt sich daher nur in seinem YAML festlegen."
     },
     "status": {
       "first_tiles": "Wähle deine ersten Kacheln",
@@ -1466,7 +1508,6 @@
       "refresh": "Neu laden",
       "update": {
         "button": "Aktualisieren",
-        "queued": "Für das Update vorgemerkt",
         "available": "Update {version}",
         "no_profile": "Kein ESPHome-Profil mit diesem Gerätenamen gefunden.",
         "whats_new": "Was ist neu",
@@ -1475,7 +1516,8 @@
         "reinstall": "Neu installieren von dev",
         "reinstall_why": "Baut diesen Bildschirm neu aus dem neuesten dev und installiert ihn über WLAN. Auf dev bleibt die Versionsnummer gleich, daher wird ein neues dev nie als Update angeboten.",
         "in_tessera": "Zuerst in Tessera aktualisieren",
-        "in_tessera_why": "Aktualisiere diesen Bildschirm zuerst hier in Tessera. Er hat noch die Flash-Aufteilung seiner ersten Installation, und die aktuelle Firmware passt nicht mehr hinein, darum kann ESPHome Device Builder ihn nicht aktualisieren. Tessera stellt ihn dabei auf die neue Aufteilung um und behält seine Einstellungen. Danach geht beides."
+        "in_tessera_why": "Aktualisiere diesen Bildschirm zuerst hier in Tessera. Er hat noch die Flash-Aufteilung seiner ersten Installation, und die aktuelle Firmware passt nicht mehr hinein, darum kann ESPHome Device Builder ihn nicht aktualisieren. Tessera stellt ihn dabei auf die neue Aufteilung um und behält seine Einstellungen. Danach geht beides.",
+        "reinstall_short": "Baut den neuesten Dev-Stand und installiert ihn über WLAN."
       },
       "host": {
         "hint": "Gib einmal die IP-Adresse ein; neue Firmware meldet sie selbst.",
@@ -1516,7 +1558,8 @@
         "done": "{name} wurde entfernt.",
         "kept": "{name} wurde entfernt. Das Profil {file} liegt noch im ESPHome-Ordner."
       },
-      "home": "Übersicht deiner Bildschirme"
+      "home": "Übersicht deiner Bildschirme",
+      "dev_chip": "Das ist die Dev-Version der App: Jeder Bildschirm, den sie baut, kommt vom Dev-Branch."
     },
     "palette": {
       "groups": {
@@ -1674,6 +1717,8 @@
         "add": "Klicke auf einen freien Platz und dann auf etwas in der Bibliothek. Oder ziehe es auf die Seite.",
         "move_label": "Verschieben",
         "move": "Ziehe eine Kachel. Lass sie auf der nächsten Seite los für eine neue Seite.",
+        "copy_label": "Kopieren",
+        "copy": "Halte {mod} oder Umschalt und klicke auf Kacheln, oder ziehe einen Rahmen von neben den Kacheln. {copy}, dann {paste} auf einer anderen Seite oder einem anderen Bildschirm.",
         "pages_label": "Seiten",
         "pages": "Ziehe eine Seite an ihrer Nummer. Der Rest steckt in ihrem ···-Menü.",
         "map_label": "Karte",
@@ -1681,7 +1726,8 @@
         "preview_label": "Vorschau",
         "preview": "Probiere Wischen und die Seiten-Kacheln aus. Zu Hause schaltet nichts."
       },
-      "copy_needs_migration": "Öffne den Quellbildschirm einmal, damit sein Layout auf Seiten umgestellt wird, und kopiere es dann."
+      "copy_needs_migration": "Öffne den Quellbildschirm einmal, damit sein Layout auf Seiten umgestellt wird, und kopiere es dann.",
+      "removed_several": "1 Kachel entfernt | {n} Kacheln entfernt"
     },
     "page": {
       "label": "Seite {page}",
@@ -1726,7 +1772,8 @@
         "screen": "Bildschirm",
         "alarm_control_panel": "Alarm",
         "lock": "Schlösser",
-        "humidifier": "Luftbefeuchter"
+        "humidifier": "Luftbefeuchter",
+        "calendar": "Kalender"
       },
       "room": "Bereich",
       "hide_placed": "Platzierte ausblenden",
@@ -2149,13 +2196,15 @@
       "entity": "Entität",
       "alarm_control_panel": "Alarmanlage",
       "lock": "Schloss",
-      "humidifier": "Luftbefeuchter"
+      "humidifier": "Luftbefeuchter",
+      "calendar": "Kalender"
     },
     "displays": {
       "standard": "Standard",
       "watch": "großer Wert",
       "forecast": "Wettervorhersage",
       "graph": "Diagramm",
+      "meter": "Messanzeige",
       "digital": "Digitaluhr",
       "analog": "Analoguhr",
       "dial": "schlichtes Zifferblatt",
@@ -2195,6 +2244,7 @@
         "watch": "Großer Wert",
         "forecast": "Wettervorhersage",
         "graph": "Diagramm",
+        "meter": "Messanzeige",
         "sunpath": "Sonnenbahn",
         "live": "Livebild",
         "live_needs_firmware": "Ein Livebild braucht Firmware 0.2.77 oder neuer: Nach dem Speichern beim Bildschirm auf Aktualisieren drücken.",
@@ -2208,6 +2258,8 @@
         "map_needs_firmware": "Eine Karte braucht Firmware 0.20.0 oder neuer: Nach dem Speichern beim Bildschirm auf Aktualisieren drücken.",
         "no_graph": "Home Assistant hat für diese Entität keine Zahlen, daher bleibt das Diagramm leer. Wähle eine andere Anzeige.",
         "no_forecast": "Dieser Wetterdienst hat in Home Assistant keine Tagesvorhersage. Wähle eine andere Anzeige.",
+        "no_meter": "Home Assistant hat für diese Entität keine Zahlen, daher bleibt die Messanzeige leer. Wähle eine andere Anzeige.",
+        "meter_needs_firmware": "Eine Messanzeige braucht Firmware 0.56.0 oder neuer: Nach dem Speichern beim Bildschirm auf Aktualisieren drücken.",
         "tall_cover_hint": "",
         "face_needs_firmware": "Diese Uhr braucht Firmware 0.3.6 oder neuer: Nach dem Speichern beim Bildschirm auf Aktualisieren drücken. Bis dahin zeigt der Bildschirm die Digitaluhr.",
         "map_tile_needs_firmware": "Die Kartenkachel braucht Firmware 0.21.0 oder neuer: Nach dem Speichern beim Bildschirm auf Aktualisieren drücken.",
@@ -2404,7 +2456,144 @@
           "dots": "Bewegte Punkte",
           "lines": "Linien und Pfeile"
         }
+      },
+      "calendar": {
+        "title": "Kalender",
+        "needs_firmware": "Die Kalenderkarte braucht Firmware 0.56.0 oder neuer: Nach dem Speichern beim Bildschirm auf Aktualisieren drücken.",
+        "show": {
+          "label": "Anzeige",
+          "events": "Termine",
+          "events_hint": "Titel, was als Nächstes kommt, die Woche und der Monat",
+          "busy_free": "Frei oder belegt",
+          "busy_free_hint": "Frei, Beginnt gleich oder Belegt in großer Schrift, die nächste Buchung und wie lange sie dauert",
+          "room": "Status und Buchen",
+          "room_hint": "Frei oder Belegt groß in Grün oder Rot, bis wann, und Tasten, die den Raum jetzt buchen"
+        },
+        "calendars": {
+          "label": "Kalender",
+          "hint": "Bis zu {n} Kalender auf einer Karte, jeder in seiner eigenen Farbe aus Home Assistant.",
+          "count": "{n} Kalender | {n} Kalender",
+          "own": "Diese Kachel",
+          "none": "Home Assistant hat keine weiteren Kalender."
+        },
+        "filter": {
+          "title": "Welche Termine",
+          "found": "{n} Termin | {n} Termine"
+        },
+        "places": {
+          "label": "Ort",
+          "hint": "Nur Termine an diesen Orten, z. B. in einem Besprechungsraum. Die Orte stammen aus den Terminen der Kalender selbst; einen anderen eintippen, um ihn hinzuzufügen.",
+          "add": "Ort hinzufügen"
+        },
+        "words": {
+          "label": "Wörter im Titel",
+          "hint": "Nur Termine mit einem dieser Wörter im Titel und keine mit einem der auszulassenden Wörter.",
+          "only": "Nur mit",
+          "hide": "Auslassen",
+          "add": "Wort hinzufügen"
+        },
+        "all_day": "Ganztägige Termine",
+        "tentative": "Vorläufige Termine",
+        "tentative_hint": "Termine, die noch nicht bestätigt sind, so wie der Kalender sie kennzeichnet.",
+        "private": "Titel ausblenden",
+        "private_hint": "Jeder Termin erscheint als Belegt, ohne Titel und Ort: für einen Bildschirm im Flur oder in einem gemeinsamen Raum.",
+        "time": {
+          "title": "Zeit"
+        },
+        "ahead": "Vorausschau",
+        "ahead_hint": "Wie viele Tage an Terminen die Karte ab heute zeigt.",
+        "days": "{n} Tag | {n} Tage",
+        "soon": "Beginnt gleich",
+        "soon_hint": "Wie lange vor einem Termin die Karte Beginnt gleich zeigt.",
+        "soon_off": "Aus",
+        "minutes": "{n} Min. | {n} Min.",
+        "start_view": "Vollbild öffnet mit",
+        "start_view_hint": "Ein Tippen auf die Karte öffnet ihr Vollbild. Automatisch zeigt die Woche, wo der Bildschirm Platz dafür hat, sonst den Tag.",
+        "view": {
+          "auto": "Automatisch",
+          "up_next": "Demnächst",
+          "day": "Tag",
+          "week": "Woche",
+          "month": "Monat"
+        },
+        "week_start": "Woche beginnt",
+        "week_start_hint": "Heute hält die kommenden Tage im Blick; Montag zeigt die Kalenderwoche.",
+        "week_start_today": "Heute",
+        "week_start_monday": "Montag",
+        "hours": "Stunden",
+        "hours_hint": "Die Stunden, die die Woche zeigt. Automatisch folgt den Terminen, mindestens acht bis acht; was außerhalb liegt, wird gezählt.",
+        "hours_auto": "Automatisch",
+        "week_numbers": "Kalenderwochen",
+        "week_numbers_hint": "Im Monat, links neben jeder Woche.",
+        "book": {
+          "title": "Buchen",
+          "on": "Buchen in",
+          "on_hint": "Der Kalender, in den eine Buchung vom Bildschirm kommt. Nur Kalender, die neue Termine von Home Assistant annehmen, etwa Local Calendar, Google und CalDAV.",
+          "none": "Keiner der Kalender dieser Karte nimmt neue Termine von Home Assistant an, daher zeigt die Karte keine Buchungstasten.",
+          "place": "Ort",
+          "place_hint": "Wird als Ort in die Buchung geschrieben, etwa der Name des Raums.",
+          "place_add": "Ort hinzufügen",
+          "name": "Titel",
+          "name_hint": "Der Titel der Buchung im Kalender.",
+          "name_placeholder": "Am Bildschirm gebucht"
+        }
+      },
+      "meter": {
+        "title": "Messanzeige",
+        "look": "Form",
+        "styles": {
+          "ring": "Ring",
+          "tape": "Skala",
+          "bar": "Balken"
+        },
+        "range": "Bereich",
+        "range_hint": "Wo die Anzeige beginnt und endet. Von Home Assistant läuft ein Sensor von 0 bis 100, wie auf seiner Gauge-Karte; lege für eine Temperatur, CO2 oder Leistung einen eigenen fest.",
+        "range_ha": "Von Home Assistant",
+        "range_own": "Eigener",
+        "min": "Min",
+        "max": "Max",
+        "outside": "{value} liegt außerhalb von {min} – {max}.",
+        "set_own": "Bereich selbst festlegen",
+        "range_wrong": "Das Minimum muss kleiner als das Maximum sein.",
+        "color": "Farbe",
+        "segments": "Segmente",
+        "segments_hint": "Eine Farbe für die ganze Anzeige, oder zwei oder drei, die an einer Schwelle wechseln. Eine Schwelle ist ein Wert in der Einheit des Sensors.",
+        "whole": "die ganze Anzeige",
+        "up_to": "bis",
+        "above": "darüber",
+        "swatch_aria": "Farbe von Segment {n}: {color}",
+        "own_color": "Die eigene Farbe der Kachel",
+        "threshold_aria": "Schwelle {n}",
+        "thresholds_wrong": "Jede Schwelle muss höher sein als die vorige.",
+        "reset": "Auf Standard zurücksetzen",
+        "colors": {
+          "red": "Rot",
+          "pink": "Rosa",
+          "purple": "Lila",
+          "deep-purple": "Dunkellila",
+          "indigo": "Indigo",
+          "blue": "Blau",
+          "light-blue": "Hellblau",
+          "cyan": "Cyan",
+          "teal": "Petrol",
+          "green": "Grün",
+          "light-green": "Hellgrün",
+          "lime": "Limette",
+          "yellow": "Gelb",
+          "amber": "Bernstein",
+          "orange": "Orange",
+          "deep-orange": "Dunkelorange",
+          "brown": "Braun",
+          "grey": "Grau",
+          "blue-grey": "Blaugrau"
+        }
       }
+    },
+    "precision": {
+      "label": "Anzeigegenauigkeit",
+      "default": "Standard ({value})",
+      "note": "Das ist die Einstellung von Home Assistant für diesen Sensor, sie ändert sich also auch dort.",
+      "unregistered": "Dieser Sensor hat keine eindeutige ID, daher speichert Home Assistant keine Einstellungen für ihn."
     },
     "tile_card": {
       "label": "{name}, Platz {slot} auf Seite {page}. Enter: einstellen, Pfeiltasten: verschieben",
@@ -2668,7 +2857,11 @@
         "all": "1 Bildschirm aktualisieren | Alle {n} Bildschirme aktualisieren",
         "whats_new": "Neu in Firmware {version}",
         "auto_label": "Jede Nacht automatisch aktualisieren",
-        "auto_hint": "Zwischen 03:00 und 06:00 Uhr, ein Bildschirm nach dem anderen. Stoppt bei einem Fehler und meldet ihn in Home Assistant."
+        "auto_hint": "Zwischen 03:00 und 06:00 Uhr, ein Bildschirm nach dem anderen. Stoppt bei einem Fehler und meldet ihn in Home Assistant.",
+        "reinstall_all": "1 Bildschirm von Dev neu installieren | Alle {n} Bildschirme von Dev neu installieren",
+        "reinstall_all_hint": "Baut für jeden Bildschirm den neuesten Dev-Stand, einen nach dem anderen, und installiert ihn über WLAN. Auf Dev bleibt die Versionsnummer gleich, darum wird ein neuer Dev-Stand nie als Update angeboten.",
+        "reinstall_all_confirm": "1 Bildschirm vom neuesten Dev-Stand neu installieren? Er startet neu, sobald die Firmware drauf ist. | {n} Bildschirme vom neuesten Dev-Stand neu installieren? Sie werden nacheinander gebaut, und jeder startet neu, sobald seine Firmware drauf ist.",
+        "reinstall_all_go": "Neu installieren"
       },
       "claude": {
         "installed": "Skill installiert. Claude Code nutzt ihn sofort.",
@@ -2735,7 +2928,8 @@
       "download_target": "Datei herunterladen und selbst flashen",
       "host": "IP-Adresse oder Hostname",
       "download_file": "{name} herunterladen",
-      "download_how": "Spiele sie mit {esphome_web} in Chrome oder Edge auf den Bildschirm: „Connect“ klicken, den USB-Port des Bildschirms wählen, „Install“ klicken und diese Datei auswählen. Sie enthält dein Wi-Fi-Passwort und die Schlüssel des Bildschirms: Behalte sie für dich."
+      "download_how": "Spiele sie mit {esphome_web} in Chrome oder Edge auf den Bildschirm: „Connect“ klicken, den USB-Port des Bildschirms wählen, „Install“ klicken und diese Datei auswählen. Sie enthält dein Wi-Fi-Passwort und die Schlüssel des Bildschirms: Behalte sie für dich.",
+      "waiting": "wartet, 1 Build zuerst | wartet, {n} Builds zuerst"
     },
     "installer": {
       "board": "Welchen Bildschirm hast du?",
@@ -2795,7 +2989,6 @@
       },
       "install": "Installieren",
       "save_profile": "Profil speichern",
-      "busy": "Es wird schon eine Firmware erstellt oder installiert ({file}). Warte, bis das fertig ist.",
       "no_cli": "In dieser Installation fehlt die ESPHome CLI; nur das Speichern des Profils ist möglich.",
       "progress": {
         "saved": "{file} liegt im ESPHome-Ordner",
@@ -2804,7 +2997,8 @@
         "ready": "Firmware für {name} ist fertig",
         "installed": "Firmware ist auf {name}",
         "build_failed": "Erstellen fehlgeschlagen",
-        "install_failed": "Installation fehlgeschlagen"
+        "install_failed": "Installation fehlgeschlagen",
+        "waiting": "Wartet, bis er dran ist…"
       },
       "detail": {
         "saved": "Installiere es später über Firmware & USB: Wähle dieses Profil, dann den USB-Port des Home Assistant-Rechners oder „Download“, um die Firmware von deinem eigenen Computer aus auf den Bildschirm zu spielen. Speichere den API-Schlüssel für die Kopplung:",
@@ -2814,7 +3008,9 @@
         "downloaded": "Spiele sie von deinem eigenen Computer auf den Bildschirm. Er erscheint hier, sobald er im WLAN ist.",
         "booted": "Der Bildschirm startet, verbindet sich mit deinem WLAN und kommt von selbst in Home Assistant.",
         "booted_calibrate": "Der Bildschirm startet und verbindet sich mit deinem WLAN. Zuerst fragt er nach einer Touch-Kalibrierung: tippe auf die Kreuze. Danach kommt er von selbst in Home Assistant.",
-        "see_log": "Siehe das Protokoll unten."
+        "see_log": "Siehe das Protokoll unten.",
+        "waiting": "1 Build kommt zuerst. Dieser startet danach von selbst, und du kannst diese Seite verlassen. | {n} Builds kommen zuerst. Dieser startet danach von selbst, und du kannst diese Seite verlassen.",
+        "waiting_browser": "1 Build kommt zuerst. Dieser startet danach von selbst. Lass diese Seite offen: Sie schreibt den Bildschirm, sobald seine Firmware gebaut ist. | {n} Builds kommen zuerst. Dieser startet danach von selbst. Lass diese Seite offen: Sie schreibt den Bildschirm, sobald seine Firmware gebaut ist."
       },
       "download_steps": {
         "plug": "{bold} – mit einem USB-Datenkabel.",
@@ -2913,7 +3109,8 @@
       "pair_yourself": "Selbst in Home Assistant hinzufügen",
       "grid": "Raster",
       "grid_hint": "Das vorgeschlagene Raster ist das beste für diesen Bildschirm. Du kannst es und die Ausrichtung später neben den Seiten im Editor ändern, ohne neu zu bauen.",
-      "grid_best": "Zurück zum besten"
+      "grid_best": "Zurück zum besten",
+      "waits_turn": "Gerade wird ein anderer Bildschirm gebaut. Dieser wartet, bis er dran ist, und startet danach von selbst."
     },
     "alerts": {
       "eyebrow": "Meldungen · Spickzettel",
@@ -3105,11 +3302,13 @@
       "confirm_example": "Den aktuellen Text durch das Beispiel ersetzen?",
       "example_loaded": "Beispiel geladen. Speichere es, wenn du so weit bist.",
       "confirm_clear": "Die lokale Anpassung leeren?",
-      "cleared": "Nach dem Speichern ist die Anpassung leer."
+      "cleared": "Nach dem Speichern ist die Anpassung leer.",
+      "checking_waits": "Wartet auf den laufenden Build, dann wird geprüft…"
     },
     "mockup": {
       "home": "Zuhause",
-      "unknown": "Unbekannt"
+      "unknown": "Unbekannt",
+      "calendar_free": "Frei"
     },
     "pages": {
       "mode": "Editormodus",
@@ -3149,6 +3348,8 @@
       "arrange": "Ab Startseite anordnen",
       "zoom_out": "Verkleinern",
       "zoom_in": "Vergrößern",
+      "zoom": "Größe der Seiten",
+      "zoom_reset": "Zurück auf 100 %",
       "choose_destination": "Zielseite auswählen.",
       "move_map": "{name} auf der Karte verschieben",
       "change_destination": "Ziel einer Navigationskachel auf {name} ändern",
@@ -3424,6 +3625,7 @@
       "reset": "Zurück zu {name}"
     },
     "phone": {
+      "menu": "Menü",
       "screens": "Bildschirme",
       "add_tile": "Kachel hinzufügen",
       "add_to_cell": "Kommt an Platz {cell} auf {page}",
@@ -3458,12 +3660,12 @@
       "failed": "Der letzte Build von {screen} ist fehlgeschlagen. Das Protokoll sagt, warum.",
       "title": "Wird gerade gebaut",
       "count": "1 Build unterwegs | {n} Builds unterwegs",
-      "waiting": "Wartet, bis es dran ist",
       "ready": "{name} ist fertig",
       "ready_several": "{names} sind fertig",
       "update_failed": "Update von {name} fehlgeschlagen",
       "build_failed": "Build von {name} fehlgeschlagen",
-      "show_log": "Log anzeigen"
+      "show_log": "Log anzeigen",
+      "waiting_place": "Wartet, 1 Build zuerst | Wartet, {n} Builds zuerst"
     },
     "grid": {
       "title": "Raster",
@@ -3482,6 +3684,22 @@
       "landscape": "Quer",
       "portrait": "Hoch",
       "turn_hint": "Beim Drehen startet der Bildschirm einmal neu, um sein neues Bild auszumessen."
+    },
+    "clipboard": {
+      "copied": "1 Kachel kopiert. Mit {key} auf einer Seite oder einem Bildschirm einfügen | {n} Kacheln kopiert. Mit {key} auf einer Seite oder einem Bildschirm einfügen",
+      "cut": "1 Kachel ausgeschnitten | {n} Kacheln ausgeschnitten",
+      "pasted": "1 Kachel eingefügt | {n} Kacheln eingefügt",
+      "pasted_pages": "{n} Kacheln eingefügt, der Rest auf einer neuen Seite | {n} Kacheln eingefügt, der Rest auf {pages} neuen Seiten",
+      "pasted_some": "{n} von {total} Kacheln eingefügt. Für die anderen hat dieser Bildschirm keinen Platz",
+      "none_fit": "Nichts eingefügt. Für diese Kacheln hat dieser Bildschirm keinen Platz",
+      "empty": "Noch nichts kopiert"
+    },
+    "selection": {
+      "title": "1 Kachel | {n} Kacheln",
+      "leave": "{name} weglassen",
+      "copy": "Kopieren",
+      "hint": "{copy} kopiert die Kacheln mit allen Einstellungen. Wähle eine Seite oder ein Feld, hier oder auf einem anderen Bildschirm, und drücke {paste}.",
+      "remove": "Kachel entfernen | {n} Kacheln entfernen"
     }
   }
 }

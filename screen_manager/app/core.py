@@ -10,6 +10,8 @@ import re
 import secrets
 
 from i18n import english, screen_t, t
+import calendar_feed
+import meter
 import catalogue
 import tile_icons
 
@@ -159,7 +161,7 @@ def our_ref(value):
 # The shared firmware of this app release: packages/core.yaml's SCREEN_FIRMWARE_VERSION, what every board builds
 # unless its own board file went ahead with a fix for that board alone (firmware_target, docs/BOARD_RELEASES.md). The
 # middle number is the core: the feature gates below name a shared X.Y.0, so a feature always ships with a new core.
-FIRMWARE_VERSION = '0.55.0'
+FIRMWARE_VERSION = '0.56.0'
 # The Auto standby switch a screen offers Home Assistant automations.
 AUTO_STANDBY_MIN_FIRMWARE = '0.2.41'
 # The settings page the screen opens itself, and the screen.settings tile that opens it.
@@ -859,8 +861,10 @@ def page_cost(page, memory):
 
 def layout_cost(tiles, memory, pages=()):
     """What `tiles` (a flat layout's, the keys of a bedside clock included) and the document's `pages` take together
-    inside the screen's chip."""
-    return sum(tile_cost(tile, memory) for tile in tiles) + sum(page_cost(page, memory) for page in pages)
+    inside the screen's chip, with the tiles of the top bar on a screen that gets them (memory `bar_cards`, bar_entities)."""
+    bar = bar_entities(pages, tiles) if memory.get('bar_cards') else ()
+    return (sum(tile_cost(tile, memory) for tile in tiles) + sum(page_cost(page, memory) for page in pages)
+            + sum(tile_cost({'entity': entity}, memory) for entity in bar))
 
 def firmware_features(version, grid=DEFAULT_GRID):
     """What the editor may offer a screen with firmware `version` (a tuple, or None): the tile limit, full-page and
@@ -1157,6 +1161,31 @@ BATTERY_FEATURE = 'battery'
 BATTERY_MIN_FIRMWARE = (0, 41, 0)
 BATTERY_CONTENTS = ('icon', 'percent')
 BATTERY_SHOWS = ('always', 'low')
+# Cards from the top bar (firmware 0.56.0): an entity's item opens the card holding its tile opens (runtime_tiles::hold_card).
+# A screen whose hello names BAR_CARDS_FEATURE gets, after its other tiles, a tile without a cell for every entity in a
+# top bar that is on no tile (bar_entities), and each entity's item names the tile whose card it opens (`d`, bar_cards).
+BAR_CARDS_FEATURE = 'bar_cards'
+
+def bar_entities(pages, tiles):
+    """The entities in the pages' top bars that are on none of `tiles`, once each and in the order the bars name them: the
+    tiles of the top bar a screen gets (BAR_CARDS_FEATURE). Only a type the screen draws a card for (a file in catalogue/).
+    The editor counts the same ones (web/src/model/memory.ts barEntities)."""
+    on_tiles, out = {str(tile.get('entity', '')) for tile in tiles}, []
+    for page in pages:
+        for item in (page.get('topbar') or {}).get('trailing') or []:
+            entity = item.get('entity') if isinstance(item, dict) and item.get('type') == 'entity' else None
+            if (isinstance(entity, str) and entity not in on_tiles and entity not in out and not entity.startswith('screen.')
+                    and entity.split('.', 1)[0] in catalogue.DOMAINS):
+                out.append(entity)
+    return out
+
+def bar_cards(tiles):
+    """Which tile's card each entity's item in the top bar opens (`d`, BAR_CARDS_FEATURE): its first tile, one on a page,
+    a key of a bedside clock or a tile of the top bar."""
+    cards = {}
+    for index, tile in enumerate(tiles):
+        cards.setdefault(tile['entity'], index)
+    return cards
 # A plugin's item (plugin API 0.8): its icon and the words its plugin gives, or its icon alone, as a person chooses.
 PLUGIN_ITEM_CONTENTS = ('all', 'icon')
 # Only shown, never controlled: the top bar takes these besides every tile domain.
@@ -1309,7 +1338,11 @@ TILE_EVENT_OPTIONS = {'size': 'size', 'controls': 'controls', 'display': 'displa
                       # Its own shuffle and repeat (app 0.4.84).
                       'shuffle': 'shuffle', 'repeat': 'repeat',
                       # How the energy card shows power along a line: dots or lines.
-                      'flow': 'flow'}
+                      'flow': 'flow',
+                      # A calendar card (firmware 0.56.0): its calendars, filters and look (calendar_feed.validate).
+                      **{key: key for key in calendar_feed.KEYS},
+                      # A sensor's meter (firmware 0.56.0): its look, its range and its colours (meter.validate).
+                      **{key: key for key in meter.KEYS}}
 TILE_SIZES = {'full': 'full', 'fullscreen': 'full', 'full screen': 'full', 'full-screen': 'full', 'page': 'full', 'whole page': 'full',
               'wide': 'wide', 'double': 'wide', 'large': 'wide', 'big': 'wide',
               'single': 'single', 'small': 'single', 'normal': 'single', 'tall': 'tall', 'high': 'tall', 'square': 'square'}
@@ -1400,6 +1433,30 @@ def tile_options(data, current=None):
         elif name == 'play':
             # What a favourite plays is an object, as the editor stores it (validate_favorite checks it).
             options[name] = value
+        elif name in ('calendars', 'places', 'words', 'hide_words'):
+            # A calendar card's lists (firmware 0.56.0): a list, or words split at commas as people write them.
+            options[name] = [str(v).strip() for v in (value if isinstance(value, list) else str(value).split(','))]
+        elif name == 'hours':
+            # A calendar week's hours: two numbers, as a list or written "8-18".
+            parts = value if isinstance(value, list) else re.split(r'\s*[-–,]\s*', str(value).strip())
+            options[name] = [int(p) if str(p).strip().isdigit() else p for p in parts]
+        elif name in ('all_day', 'tentative', 'private', 'week_numbers'):
+            options[name] = value if isinstance(value, bool) else loose(value) in ('true', 'yes', 'on', '1')
+        elif name in ('ahead', 'soon'):
+            options[name] = int(value) if str(value).strip().isdigit() else value
+        elif name in ('min', 'max', 'segments'):
+            # A meter's range and its count of colours: numbers, as people write them ("21,5" as well).
+            try:
+                number = float(str(value).strip().replace(',', '.'))
+                options[name] = int(number) if number.is_integer() else number
+            except ValueError:
+                options[name] = value
+        elif name in ('colors', 'thresholds'):
+            # A meter's colours and the thresholds between them: a list, or written with commas ("green, orange, red").
+            parts = value if isinstance(value, list) else [p for p in re.split(r'\s*[,;]\s*', str(value).strip()) if p]
+            if name == 'thresholds':
+                parts = [float(p) if isinstance(p, str) and re.fullmatch(r'-?\d+(\.\d+)?', p) else p for p in parts]
+            options[name] = [str(p).strip() for p in parts] if name == 'colors' else parts
         else:
             options[name] = str(value).strip()
     # Perform action (app 0.2.67): `action` names Home Assistant's action and `data` its fields; the tap follows.
@@ -1855,8 +1912,21 @@ def validate_layout(data, stored=False, grid=DEFAULT_GRID):
             continue
         if 'options' in tile:
             options = tile['options']
-            if not isinstance(options, dict) or set(options) - {'tap', 'display', 'inline', 'history_hours', 'background', 'size', 'icon', 'controls', 'action', 'refresh', 'sub', 'fit', 'overlay', 'guard', 'flow', *MAP_OWN, *FAVORITE_OWN}:
+            if not isinstance(options, dict) or set(options) - {'tap', 'display', 'inline', 'history_hours', 'background', 'size', 'icon', 'controls', 'action', 'refresh', 'sub', 'fit', 'overlay', 'guard', 'flow', *MAP_OWN, *FAVORITE_OWN, *calendar_feed.KEYS, *meter.KEYS}:
                 raise ValueError(t('addon.errors.layout.unknown_settings'))
+            # A calendar card's choices (firmware 0.56.0): its calendars, its filters, its look; other tiles have none.
+            if tile['entity'].startswith('calendar.'):
+                try:
+                    options = calendar_feed.validate(options)
+                except ValueError as error:
+                    raise ValueError(t('addon.errors.layout.invalid_setting', setting=str(error))) from None
+            else:
+                options = {k: v for k, v in options.items() if k not in calendar_feed.KEYS}
+            # A sensor's meter (firmware 0.56.0): its look, its range and its colours; another display keeps none of them.
+            try:
+                options = meter.validate(options)
+            except ValueError as error:
+                raise ValueError(t('addon.errors.layout.invalid_setting', setting=str(error))) from None
             # A navigation tile (screen.page_<n>, firmware 0.2.62+) has a name, an icon, a colour and a width; never the page.
             if page_target(tile['entity']):
                 if options.get('size') == 'full':
@@ -2427,7 +2497,10 @@ def screen_options(tile, attrs, state=None, entry=None):
     and `controls` only as the set the card really shows (firmware 0.2.19+, ignored before)."""
     # A map's own choices stay in the app: who is on it and how it frames them say where people are (app 0.4.33).
     # So do a favourite's own (app 0.4.42): the screen asks to play its tile, never an id.
-    options = {k: v for k, v in tile.get('options', {}).items() if k not in ('icon', 'controls', 'action', *MAP_OWN, *FAVORITE_OWN)}
+    # A calendar's filters stay too (calendar_feed.OWN): the screen gets the events they let through.
+    options = {k: v for k, v in tile.get('options', {}).items() if k not in ('icon', 'controls', 'action', *MAP_OWN, *FAVORITE_OWN, *calendar_feed.OWN)}
+    # A meter's colours travel as numbers (firmware 0.56.0): the screen keeps no table of names.
+    options = meter.screen_options(options)
     icon = tile_icon(tile, attrs, state, entry)
     if icon:
         options['icon'] = icon

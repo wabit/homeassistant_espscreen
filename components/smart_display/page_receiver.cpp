@@ -23,6 +23,9 @@ static bool parse_bar_item(JsonVariant value, header_bar::Item &item) {
     item.only_weak = (item.kind == header_bar::Kind::wifi || item.kind == header_bar::Kind::battery) &&
                      value["a"].is<unsigned>() && value["a"].as<unsigned>() == 1;
     item.icon_only = item.kind == header_bar::Kind::plugin && value["o"].is<unsigned>() && value["o"].as<unsigned>() == 1;
+    // An entity's item (firmware 0.56.0+): the index of the tile whose card a tap on it opens, one on a page or a tile of
+    // the top bar (Tile::BAR_TILE).
+    if (value["d"].is<unsigned>() && value["d"].as<unsigned>() < header_bar::NO_CARD) item.card = static_cast<uint16_t>(value["d"].as<unsigned>());
     if (item.kind == header_bar::Kind::ago && item.epoch == 0) return false;
     // A plugin's item names itself: plugin:<plugin>.<item> (docs/PLUGINS.md).
     if (item.kind == header_bar::Kind::plugin && !plugin_key(item.text)) return false;
@@ -592,6 +595,8 @@ std::string receive(const std::string &payload) {
       // A key of a bedside clock (firmware 0.8.0+) names its clock ("in") and its place under it ("k") instead of a
       // slot. It is a tile in every other way: its state, its tap, its hold and its card are a tile's.
       const bool key = root["in"].is<unsigned>();
+      // A tile of the top bar (firmware 0.56.0+): no cell and no clock, only its card, which a tap on its item opens.
+      const bool bar = !key && root["bar"].is<unsigned>() && root["bar"].as<unsigned>() == 1;
       // A layout past this screen's memory (firmware 0.34.0+): an app that does not ask the screen's budget can send more
       // than it holds, and a screen that runs out halfway loses its Wi-Fi link while it runs on, out of reach until
       // someone resets it (bench 2026-10-03). Below the floor the transfer stops here: the screen lets go of the tiles it
@@ -602,7 +607,7 @@ std::string receive(const std::string &payload) {
         return false;
       }
       if (transfer.active || index >= model.count || model.tiles[index].received || !valid_entity(entity) ||
-          !(key ? root["k"].is<unsigned>() : root["slot"].is<unsigned>()) || !root["o"].is<JsonObject>()) return false;
+          !(key ? root["k"].is<unsigned>() : bar || root["slot"].is<unsigned>()) || !root["o"].is<JsonObject>()) return false;
       const std::string size = string(root["o"]["size"]);
       if (key) {
         const unsigned parent = root["in"].as<unsigned>(), place = root["k"].as<unsigned>();
@@ -612,6 +617,9 @@ std::string receive(const std::string &payload) {
           if (i != index && model.tiles[i].received && model.tiles[i].parent == static_cast<int16_t>(parent) && model.tiles[i].key == place) return false;
         model.tiles[index].parent = static_cast<int16_t>(parent);
         model.tiles[index].key = static_cast<uint8_t>(place);
+      } else if (bar) {
+        if (!size.empty() || page_entity(entity) || entity.rfind("screen.", 0) == 0 || entity.rfind("plugin:", 0) == 0) return false;
+        model.tiles[index].parent = Tile::BAR_TILE;
       } else {
         if (!page_protocol::accepts_size(size, grid.columns, grid.rows)) return false;
         unsigned span_columns = 0, span_rows = 0;
@@ -666,6 +674,40 @@ std::string receive(const std::string &payload) {
     tile.refresh = refresh == 0 || (refresh >= 5 && refresh <= 3600) ? refresh : 15;
     tile.overlay = string(options["overlay"], 8) != "none";
     tile.energy_lines = string(options["flow"], 8) == "lines";
+    // A calendar card's choices (firmware 0.56.0+): its look, when an event "starts soon", its full screen's first view.
+    tile.calendar_busy_free = string(options["style"], 12) == "busy_free";
+    tile.calendar_soon = options["soon"].is<int>() ? (uint8_t) std::clamp(options["soon"].as<int>(), 0, 120) : 0;
+    tile.calendar_view = string(options["start_view"], 8);
+    // ... and (dev) "Status and booking", a week from Monday, fixed hours in the week and the month's week numbers.
+    tile.calendar_room = string(options["style"], 12) == "room";
+    tile.calendar_monday = string(options["week_start"], 8) == "monday";
+    tile.calendar_hours_from = tile.calendar_hours_to = 0;
+    if (options["hours"].is<JsonArray>()) {
+      const int a = options["hours"][0] | 0, b = options["hours"][1] | 0;
+      if (a >= 0 && b <= 24 && b - a >= 4) { tile.calendar_hours_from = (uint8_t) a; tile.calendar_hours_to = (uint8_t) b; }
+    }
+    tile.calendar_week_numbers = options["week_numbers"].is<bool>() && options["week_numbers"].as<bool>();
+    // A sensor's meter (firmware 0.56.0, meter_card.h): a ring, a tape or a bar, its own range, one to three colours.
+    tile.meter.reset();
+    if (tile.display == "meter") {
+      auto m = std::make_shared<Tile::Meter>();
+      const std::string style = string(options["meter"], 8);
+      m->style = style == "tape" ? 1 : style == "bar" ? 2 : 0;
+      if (options["min"].is<float>() && options["max"].is<float>()) {
+        const float low = options["min"].as<float>(), high = options["max"].as<float>();
+        if (std::isfinite(low) && std::isfinite(high) && low < high) { m->low = low; m->high = high; }
+      }
+      m->segments = (uint8_t) std::clamp(options["segments"] | 1, 1, 3);
+      if (options["colors"].is<JsonArray>()) {
+        size_t i = 0;
+        for (JsonVariant c : options["colors"].as<JsonArray>()) { if (i == 3) break; m->colors[i++] = (c | 0u) & 0xFFFFFF; }
+      }
+      if (options["thresholds"].is<JsonArray>()) {
+        size_t i = 0;
+        for (JsonVariant v : options["thresholds"].as<JsonArray>()) { if (i == 2) break; m->thresholds[i++] = v.is<float>() ? v.as<float>() : NAN; }
+      }
+      tile.meter = std::move(m);
+    }
     tile.inline_control = string(options["inline"]); if (tile.inline_control.empty()) tile.inline_control="none";
     // What the second line says (firmware 0.2.90+); "auto" is the line the screen works out itself, as before.
     tile.subtitle = string(options["sub"], 96); if (tile.subtitle.empty()) tile.subtitle="auto";
@@ -991,6 +1033,45 @@ std::string receive(const std::string &payload) {
       e->rest = std::max(0.f, number(extra["o"], 0));
       e->home_name = string(extra["n"], 32);
       next.energy = std::move(e);
+    }
+    // A calendar card (firmware 0.56.0+, calendar_card.h): today, the calendars' colours and names, the events the app
+    // filtered for this card (minutes from today 00:00), how many it left out, the notes of the event of the moment, and
+    // a mask a day for the month's glance. A board without PSRAM keeps 24 events (catalogue/calendar.yaml prices them).
+    if (tile.domain() == "calendar" && extra["cal"].is<JsonObject>()) {
+      JsonVariant c = extra["cal"];
+      auto d = std::make_shared<calendar_card::Data>();
+      if (c["d"].is<JsonArray>()) {
+        d->year = c["d"][0] | 0; d->month = std::clamp(c["d"][1] | 1, 1, 12); d->day = std::clamp(c["d"][2] | 1, 1, 31);
+        d->weekday = std::clamp(c["d"][3] | 0, 0, 6);
+      }
+      if (c["r"].is<JsonArray>()) { d->from = std::clamp(c["r"][0] | 0, -62, 0); d->to = std::clamp(c["r"][1] | 7, 0, 62); }
+      if (c["c"].is<JsonArray>()) for (JsonVariant k : c["c"].as<JsonArray>()) {
+        if (d->colors.size() == 8) break;
+        d->colors.push_back(k[0].is<uint32_t>() ? (k[0].as<uint32_t>() & 0xFFFFFF) : 0);
+        d->names.push_back(string(k[1], 32));
+      }
+      const size_t most = has_psram() ? 80 : 24;
+      if (c["e"].is<JsonArray>()) for (JsonVariant e : c["e"].as<JsonArray>()) {
+        if (d->events.size() == most) break;
+        calendar_card::Event ev;
+        ev.start = e[0] | 0; ev.end = e[1] | 0; ev.flags = (uint8_t) (e[2] | 0); ev.cal = (uint8_t) std::clamp(e[3] | 0, 0, 7);
+        ev.title = string(e[4], 64); ev.place = string(e[5], 40);
+        if (ev.end <= ev.start) ev.end = ev.start + 1;
+        d->events.push_back(std::move(ev));
+      }
+      std::stable_sort(d->events.begin(), d->events.end(), [](const calendar_card::Event &a, const calendar_card::Event &b) { return a.start < b.start; });
+      d->left_out = std::max(0, c["m"] | 0);
+      d->notes = string(c["n"], 200);
+      if (c["g"].is<JsonArray>()) {
+        d->glance_from = std::clamp(c["g"][0] | 0, -62, 0);
+        if (c["g"][1].is<JsonArray>()) for (JsonVariant mask : c["g"][1].as<JsonArray>()) { if (d->glance.size() == 62) break; d->glance.push_back((uint8_t) (mask | 0)); }
+      }
+      if (c["b"].is<JsonArray>()) {
+        d->book_on = string(c["b"][0], 128);
+        if (d->book_on.rfind("calendar.", 0) != 0) d->book_on.clear();
+        d->book_place = string(c["b"][1], 48); d->book_title = string(c["b"][2], 48);
+      }
+      next.calendar = std::move(d);
     }
     // An alarm panel (app 0.3.8+, firmware 0.3.3+): how it takes codes, who changed it, and a delay's end.
     if (tile.domain() == "alarm_control_panel") {

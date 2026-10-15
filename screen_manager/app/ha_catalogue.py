@@ -15,8 +15,10 @@ import catalogue
 from catalogue import remote_commands
 import core
 from core import attribute_word, state_word
+import durations
 import header_bar
 import history_card
+import i18n
 from i18n import t
 
 # Which action each of our widgets sends, and what else it needs of an entity, is the tile catalogue's
@@ -245,6 +247,8 @@ def refusal(entity_id, name, key, value):
         return t('addon.errors.home_assistant.no_graph', name=label)
     if key == 'display' and value == 'forecast':
         return t('addon.errors.home_assistant.no_forecast', name=label)
+    if key == 'display' and value == 'meter':
+        return t('addon.errors.home_assistant.no_meter', name=label)
     return t('addon.errors.home_assistant.no_control', name=label)
 
 
@@ -259,7 +263,7 @@ def unsupported(tile, previous, caps):
         ('tap', options.get('tap') == 'toggle' and not caps.get('toggle')),
         ('inline', options.get('inline') == 'slider' and not caps.get('inline')),
         ('controls', options.get('controls', 'none') != 'none' and options.get('controls') not in caps.get('controls', ())),
-        ('display', options.get('display') in ('graph', 'forecast') and options.get('display') not in caps.get('displays', ())),
+        ('display', options.get('display') in ('graph', 'forecast', 'meter') and options.get('display') not in caps.get('displays', ())),
     )
     for key, refused in checks:
         if refused and (previous is None or before.get(key) != options.get(key)):
@@ -278,6 +282,10 @@ def screen_word(entity_id, state, attributes, entry, words):
     """The word a tile shows for its state, where the screen would show the raw state: folded to the glyphs its fonts
     carry and short enough for a tile; None when Home Assistant has no other word."""
     domain = entity_id.split('.', 1)[0]
+    # A duration in hours and minutes, as Home Assistant writes it (durations.py, wishlist 107): the state is already
+    # rounded to the display precision.
+    if domain == 'sensor' and header_bar.numeric(state) is not None and durations.is_duration(attributes):
+        return header_bar.short(header_bar.clean_text(durations.text(state, attributes['unit_of_measurement'], i18n.screen_language())), WORD_BYTES)
     if domain not in WORD_DOMAINS or (domain == 'sensor' and header_bar.numeric(state) is not None):
         return None
     word = state_word(entity_id, state, attributes, entry, words)

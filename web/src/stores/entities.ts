@@ -51,6 +51,7 @@ export const useEntitiesStore = defineStore("entities", () => {
     if (entity?.icon) return entity.icon;
     if (domain === "weather") return icons.weather[entity?.state || ""] || icons.weather.partlycloudy;
     if (domain === "sun") return icons.sun[entity?.state || ""] || icons.sun.below_horizon;
+    if (domain === "calendar" && icons.calendar) return icons.calendar[entity?.state === "on" ? "on" : "off"];
     return icons.defaults[domain] || icons.fallback;
   }
   const tileIconCp = (tile: Tile) => iconNamed(tile.options?.icon)?.cp || automaticIcon(tile.entity);
@@ -125,6 +126,9 @@ export const useEntitiesStore = defineStore("entities", () => {
       }
     } catch { /* Inventory state remains visible until the next refresh. */ }
   }
+  /** One entity's state again at once, beside the open layout's own round: after a change of how Home Assistant writes
+   * it (a sensor's display precision). */
+  const reloadState = (entity: string) => loadLibraryStates([entity]);
   // The live value, else what the inventory knew when it was fetched, else nothing.
   function liveOf(entity: string): Live | null {
     const live = liveStates.value[entity];
@@ -182,6 +186,6 @@ export const useEntitiesStore = defineStore("entities", () => {
   return {
     ...lookups({ entityName, iconNamed, automaticIcon, tileIconCp, liveOf }),
     capabilities, entityActions, subtitleValues, loadCapabilities, loadSubtitleValues, loadEntityActions,
-    liveStates, loadStates, loadLibraryStates, topbarPreviews, loadOverview, loadHistory,
+    liveStates, loadStates, loadLibraryStates, reloadState, topbarPreviews, loadOverview, loadHistory,
   };
 });

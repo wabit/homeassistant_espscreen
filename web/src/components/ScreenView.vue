@@ -24,6 +24,7 @@ import { useScreenStore } from "../stores/screen";
 import { useSessionStore } from "../stores/session";
 import { useInventoryStore } from "../stores/inventory";
 import { removeTile } from "../editor/tiles";
+import { copyChosen, cutChosen, pasteCopied, removeTiles, selectPage } from "../editor/clipboard";
 import { useDocumentStore } from "../stores/document";
 import { useInspectorStore } from "../stores/inspector";
 
@@ -102,11 +103,20 @@ function onKey(e: KeyboardEvent) {
     if (ui.menuOpen) closeMenu();
     else if (ui.palette) return;
     else if (insp.inspector && !(e.target as HTMLElement)?.closest?.(".picker")) insp.closeInspector();
-  } else if ((e.key === "Delete" || e.key === "Backspace") && !e.defaultPrevented && insp.inspector?.kind === "tile" && doc.currentTile
-    && !isEditableTarget(e.target) && !(e.target as HTMLElement)?.closest?.("select, [role='menu'], dialog")) {
-    // The selected tile goes, as a selected object does in Keynote (app 0.4.32); Undo brings it back.
+  } else if ((e.key === "Delete" || e.key === "Backspace") && !e.defaultPrevented && insp.chosenTiles.length && !isEditableTarget(e.target) && !inMenu(e)) {
+    // The selected tile goes, as a selected object does in Keynote (app 0.4.32), and so do several chosen together; Undo
+    // brings them back.
     e.preventDefault();
-    removeTile(doc.currentTile);
+    if (insp.inspector?.kind === "tiles") removeTiles(insp.chosenTiles);
+    else removeTile(insp.chosenTiles[0]);
+  } else if (clipboardKey(e)) {
+    // Copy, cut and paste tiles, and every tile of the page chosen, as in Keynote: on the layout, never in a field, and a
+    // copy only while no text of the page is selected, which the browser copies instead.
+    const key = e.key.toLowerCase(), chosen = insp.chosenTiles.length > 0, text = Boolean(window.getSelection()?.toString());
+    if (key === "c" && chosen && !text) { e.preventDefault(); copyChosen(); }
+    else if (key === "x" && chosen && !text) { e.preventDefault(); cutChosen(); }
+    else if (key === "v") { e.preventDefault(); void pasteCopied(); }
+    else if (key === "a") { e.preventDefault(); selectPage(); }
   } else if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "s") {
     e.preventDefault();
     if (doc.dirty) doc.save();
@@ -115,15 +125,24 @@ function onKey(e: KeyboardEvent) {
     if (e.shiftKey) doc.redo(); else doc.undo();
   }
 }
+const inMenu = (e: KeyboardEvent) => Boolean((e.target as HTMLElement)?.closest?.("select, [role='menu'], dialog"));
+// ⌘ or Ctrl with C, X, V or A, meant for the tiles: on the layout, with no field, menu or question in the way.
+function clipboardKey(e: KeyboardEvent) {
+  return (e.metaKey || e.ctrlKey) && !e.altKey && !e.shiftKey && ["c", "x", "v", "a"].includes(e.key.toLowerCase()) && !e.defaultPrevented
+    && ui.tab === "layout" && !ui.route && !ui.palette && Boolean(doc.layout) && !isEditableTarget(e.target) && !inMenu(e);
+}
 useEventListener(document, "keydown", beforeKey, { capture: true });
 useEventListener(document, "keydown", onKey);
 </script>
 
 <template>
   <header class="main-head">
-    <button v-if="ui.phone" type="button" class="phone-back" @click="phoneBack">
-      <Icon name="chevron-left" />{{ ui.tab !== "layout" ? t("editor.screen_view.tabs.layout") : t("editor.phone.screens") }}
-    </button>
+    <span v-if="ui.phone" class="phone-lead">
+      <button type="button" class="icon-btn phone-menu-key" id="phone-menu" :aria-label="t('editor.phone.menu')" @click="ui.sideOpen = true"><Icon name="menu" /></button>
+      <button type="button" class="phone-back" @click="phoneBack">
+        <Icon name="chevron-left" />{{ ui.tab !== "layout" ? t("editor.screen_view.tabs.layout") : t("editor.phone.screens") }}
+      </button>
+    </span>
     <div class="head-title">
       <h1 id="screen-name">{{ screen.name }}</h1>
       <span v-if="!ui.phone" id="delivery" class="chip status" :class="statusKind" :title="statusText"><span class="dot"></span>{{ statusWord }}</span>
@@ -133,7 +152,7 @@ useEventListener(document, "keydown", onKey);
       <button type="button" id="tab-layout" role="tab" :aria-pressed="ui.tab === 'layout' ? 'true' : 'false'" :aria-selected="ui.tab === 'layout'" @click="ui.tab = 'layout'">
         <Icon name="view-dashboard-outline" />{{ t("editor.screen_view.tabs.layout") }}
       </button>
-      <button v-if="!screen.virtual" type="button" id="tab-settings" role="tab" :aria-pressed="ui.tab === 'settings' ? 'true' : 'false'" :aria-selected="ui.tab === 'settings'" @click="ui.tab = 'settings'; insp.closeInspector()">
+      <button v-if="!screen.virtual || doc.gridWay" type="button" id="tab-settings" role="tab" :aria-pressed="ui.tab === 'settings' ? 'true' : 'false'" :aria-selected="ui.tab === 'settings'" @click="ui.tab = 'settings'; insp.closeInspector()">
         <Icon name="cog-outline" />{{ t("editor.screen_view.tabs.settings") }}
       </button>
       <button v-if="!screen.virtual && plugins.pluginsEnabled" type="button" id="tab-plugins" role="tab" :aria-pressed="ui.tab === 'plugins' ? 'true' : 'false'" :aria-selected="ui.tab === 'plugins'" @click="ui.tab = 'plugins'; insp.closeInspector()">
@@ -163,7 +182,7 @@ useEventListener(document, "keydown", onKey);
           <UiMenuItem icon="view-column-outline" @select="ui.tab = 'layout'; ui.pagesSheet = true">{{ t("editor.phone.pages_order") }}</UiMenuItem>
           <UiMenuItem icon="page-layout-header" @select="ui.tab = 'layout'; insp.openBar(0, doc.barPage)">{{ t("editor.page.edit_bar") }}</UiMenuItem>
           <UiMenuSeparator />
-          <UiMenuItem v-if="!screen.virtual" icon="cog-outline" @select="phoneSettings">{{ t("editor.screen_view.tabs.settings") }}</UiMenuItem>
+          <UiMenuItem v-if="!screen.virtual || doc.gridWay" icon="cog-outline" @select="phoneSettings">{{ t("editor.screen_view.tabs.settings") }}</UiMenuItem>
           <UiMenuItem v-if="!screen.virtual && plugins.pluginsEnabled" icon="puzzle-outline" @select="closeMenu(); insp.closeInspector(); ui.tab = 'plugins'">{{ t("editor.screen_view.tabs.plugins") }}</UiMenuItem>
           <UiMenuItem v-if="!screen.virtual" icon="pencil-outline" @select="phoneRename">{{ t("editor.sidebar.rename.button") }}</UiMenuItem>
           <UiMenuSeparator />

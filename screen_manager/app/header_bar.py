@@ -8,12 +8,14 @@ without any traffic.
 
 Wire format, one message after the layout: {"v":1,"op":"header","items":[...]} with per item
 "k" (clock, analog, date, text, ago), "i" (icon codepoint), "t" (text), "e" (unix time) and
-"c" (accent colour RRGGBB).
+"c" (accent colour RRGGBB). An entity's item also has "d", the index of the tile whose card a tap on it opens, for a
+screen that takes cards from its top bar (core.BAR_CARDS_FEATURE, firmware 0.56.0+).
 """
 import math
 import unicodedata
 from datetime import datetime, time
 
+import durations
 import tile_icons
 from core import (BAR_STATUS_FEATURE, BAR_STATUS_MIN_FIRMWARE, BATTERY_CONTENTS, BATTERY_FEATURE, BATTERY_MIN_FIRMWARE, BATTERY_SHOWS,
                   HEADER_BUILTIN, HEADER_CONTENTS, HEADER_MAX_ITEMS, HEADER_MIN_FIRMWARE, HEADER_SHOWS, HEADER_STATUS, PLUGIN_ITEM_CONTENTS,
@@ -222,6 +224,9 @@ def value(entity, state, entry=None, units=None, tz=None, words=None):
         except ValueError:
             return raw, None
     number = numeric(raw)
+    # A duration as Home Assistant writes it, in hours and minutes (durations.py, wishlist 107).
+    if number is not None and domain == 'sensor' and durations.is_duration(attrs):
+        return durations.text(raw, attrs['unit_of_measurement'], i18n.screen_language(), precision_of(entry)), None
     if number is not None and domain in ('sensor', 'number', 'input_number', 'counter', 'zone'):
         return with_unit(number_text(number, precision_of(entry)), attrs.get('unit_of_measurement')), None
     if domain in ('input_text', 'input_select', 'select'):
@@ -297,8 +302,9 @@ def auto_icon(entity, state, entry=None):
         name = DOMAIN_ICONS.get(domain, tile_icons.FALLBACK)
     return tile_icons.GLYPHS[name]
 
-def entity_item(item, states, registry=None, units=None, tz=None, words=None):
-    """(wire item, shown) for one entity item; the wire item exists even while hidden, for the editor."""
+def entity_item(item, states, registry=None, units=None, tz=None, words=None, card=None):
+    """(wire item, shown) for one entity item; the wire item exists even while hidden, for the editor. `card`: the index
+    of the tile whose card a tap on it opens (core.bar_cards), or None."""
     entity = item['entity']
     state = states.get(entity)
     wire = {'k': 'text'}
@@ -325,6 +331,8 @@ def entity_item(item, states, registry=None, units=None, tz=None, words=None):
     color = accent(entity, state)
     if color:
         wire['c'] = color
+    if card is not None:
+        wire['d'] = card
     return wire, item['show'] == 'always' or active(entity, state)
 
 # What the Wi-Fi item's text says beside its bars on the screen (header_bar.h device_item): nothing, a percentage or dBm;
@@ -343,9 +351,10 @@ def status_item(item):
         wire['a'] = 1
     return wire
 
-def message(layout, states, registry=None, units=None, tz=None, words=None, features=None):
+def message(layout, states, registry=None, units=None, tz=None, words=None, features=None, cards=None):
     """`features`: what the screen's hello said it takes; the screen's own items go only to one that named them, since an
-    older screen refuses a page with an item it does not know. None: the screen of this app's own firmware (the preview)."""
+    older screen refuses a page with an item it does not know. None: the screen of this app's own firmware (the preview).
+    `cards`: which tile's card each entity's item opens (core.bar_cards), for a screen that takes cards from its top bar."""
     items = []
     for item in header_items(layout):
         if item['type'] in HEADER_BUILTIN:
@@ -363,7 +372,7 @@ def message(layout, states, registry=None, units=None, tz=None, words=None, feat
             if features is None or 'plugins' in features:
                 items.append({'k': 'plugin', 't': item['item'], **({'o': 1} if item.get('content') == 'icon' else {})})
             continue
-        wire, shown = entity_item(item, states, registry, units, tz, words)
+        wire, shown = entity_item(item, states, registry, units, tz, words, (cards or {}).get(item['entity']))
         if shown:
             items.append(wire)
     return {'v': 1, 'op': 'header', 'items': items}

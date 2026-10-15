@@ -586,6 +586,43 @@
     },
     "plugin": {
       "missing": "Plugin missing"
+    },
+    "calendar": {
+      "free": "Free",
+      "busy": "Busy",
+      "starts_soon": "Starts soon",
+      "private": "Busy",
+      "all_day": "All day",
+      "today": "Today",
+      "tomorrow": "Tomorrow",
+      "nothing": "Nothing planned",
+      "nothing_more": "Nothing else this week",
+      "until": "Until {x}",
+      "next": "Next {x}",
+      "left": "{x} left",
+      "in": "in {x}",
+      "more": "{x} more",
+      "earlier": "{x} earlier",
+      "later": "{x} later",
+      "more_week": "{x} more this week",
+      "days_view": "{x} days",
+      "views": [
+        "Up next",
+        "Day",
+        "Week",
+        "Month"
+      ],
+      "view_notes": [
+        "What runs now, then the next ones",
+        "One day, a tap on the strip picks it",
+        "Days side by side, hours down",
+        "A glance at the month, a tap opens a day"
+      ],
+      "today_key": "Today",
+      "booking": "Booking…",
+      "calendars": "Calendars",
+      "also": "+{x} now",
+      "booked": "Booked on the screen"
     }
   },
   "addon": {
@@ -707,6 +744,7 @@
         "no_small_slider": "{name} has nothing a small slider can change in Home Assistant.",
         "no_graph": "{name} has no numbers to draw a graph of.",
         "no_forecast": "{name} has no daily forecast in Home Assistant.",
+        "no_meter": "{name} has no numbers to show on a meter.",
         "no_control": "Home Assistant doesn't offer that direct control for {name}."
       },
       "alerts": {
@@ -755,7 +793,8 @@
         "build_first": "Build the firmware first; the download appears when the build has finished.",
         "unknown_action": "Unknown firmware action.",
         "host": "Enter the IP address or hostname of the intended screen.",
-        "grid": "Choose a grid this screen takes."
+        "grid": "Choose a grid this screen takes.",
+        "build_gone": "This build is no longer known. The newest builds are under Firmware & USB."
       },
       "updates": {
         "automatic": "Choose on or off for automatic updates.",
@@ -767,7 +806,9 @@
         "no_profile": "No ESPHome profile found for this screen. Check the name in the ESPHome folder.",
         "ip_unknown": "IP address unknown. Enter it once; new firmware reports it itself after that.",
         "all_updated": "All reachable screens are already updated.",
-        "reinstall_dev": "Reinstalling the same firmware is for the dev channel only."
+        "reinstall_dev": "Reinstalling the same firmware is for the dev channel only.",
+        "all_on_the_way": "Every screen with an update has it on its way already.",
+        "nothing_to_reinstall": "No screen can be reinstalled now: each is offline, already on its way, or has no profile in this app."
       },
       "remove": {
         "not_allowed": "This app may not remove an integration from Home Assistant. Remove the screen in Home Assistant itself, under Settings → Devices & services.",
@@ -870,7 +911,8 @@
       },
       "extras": {
         "request": "This change of an extra is not possible on this screen."
-      }
+      },
+      "display_precision_unregistered": "Home Assistant keeps no settings for this sensor because it has no unique ID, so its display precision can only be set in its YAML."
     },
     "status": {
       "first_tiles": "Choose your first tiles",
@@ -1466,7 +1508,6 @@
       "refresh": "Refresh",
       "update": {
         "button": "Update",
-        "queued": "Queued for the update",
         "available": "Update {version}",
         "no_profile": "No ESPHome profile found with this device name.",
         "whats_new": "What's new",
@@ -1475,7 +1516,8 @@
         "reinstall": "Reinstall from dev",
         "reinstall_why": "Builds this screen again from the newest dev and installs it over Wi-Fi. On dev the version number stays the same, so a new dev is never offered as an update.",
         "in_tessera": "Update in Tessera first",
-        "in_tessera_why": "Update this screen here in Tessera first. It still has the flash layout it was first installed with, and the current firmware no longer fits it, so ESPHome Device Builder cannot update it. Tessera moves it to the new layout on the way and keeps its settings. After that, either way works."
+        "in_tessera_why": "Update this screen here in Tessera first. It still has the flash layout it was first installed with, and the current firmware no longer fits it, so ESPHome Device Builder cannot update it. Tessera moves it to the new layout on the way and keeps its settings. After that, either way works.",
+        "reinstall_short": "Builds the newest dev and installs it over Wi-Fi."
       },
       "host": {
         "hint": "The IP address, once; new firmware reports it itself.",
@@ -1516,7 +1558,8 @@
         "done": "{name} is removed.",
         "kept": "{name} is removed. Its profile {file} is still in the ESPHome folder."
       },
-      "home": "Overview of your screens"
+      "home": "Overview of your screens",
+      "dev_chip": "This is the dev version of the app: every screen it builds comes from the dev branch."
     },
     "palette": {
       "groups": {
@@ -1674,6 +1717,8 @@
         "add": "Click an empty spot, then something in the library. Or drag it onto the page.",
         "move_label": "Move",
         "move": "Drag a tile. Drop it on the next page for a new page.",
+        "copy_label": "Copy",
+        "copy": "Hold {mod} or Shift and click, or drag a band beside the tiles. {copy}, then {paste} on another page or screen.",
         "pages_label": "Pages",
         "pages": "Drag a page by its number. Its ··· menu has the rest.",
         "map_label": "Map",
@@ -1681,7 +1726,8 @@
         "preview_label": "Preview",
         "preview": "Try swiping and the page tiles. Nothing at home switches."
       },
-      "copy_needs_migration": "Open the source screen once so its layout can move to pages, then copy it."
+      "copy_needs_migration": "Open the source screen once so its layout can move to pages, then copy it.",
+      "removed_several": "1 tile removed | {n} tiles removed"
     },
     "page": {
       "label": "Page {page}",
@@ -1725,7 +1771,8 @@
         "screen": "Screen",
         "alarm_control_panel": "Alarm",
         "lock": "Locks",
-        "humidifier": "Humidifiers"
+        "humidifier": "Humidifiers",
+        "calendar": "Calendars"
       },
       "room": "Room",
       "hide_placed": "Hide placed",
@@ -1788,13 +1835,15 @@
       "entity": "Entity",
       "alarm_control_panel": "Alarm panel",
       "lock": "Lock",
-      "humidifier": "Humidifier"
+      "humidifier": "Humidifier",
+      "calendar": "Calendar"
     },
     "displays": {
       "standard": "standard",
       "watch": "large value",
       "forecast": "weather forecast",
       "graph": "graph",
+      "meter": "meter",
       "digital": "digital clock",
       "analog": "analog clock",
       "dial": "simple dial",
@@ -1834,6 +1883,7 @@
         "watch": "Large value",
         "forecast": "Weather forecast",
         "graph": "Graph",
+        "meter": "Meter",
         "sunpath": "Sun path",
         "live": "Live picture",
         "live_needs_firmware": "A live picture needs firmware 0.2.77 or newer: press Update on the screen after saving.",
@@ -1847,6 +1897,8 @@
         "map_needs_firmware": "A map needs firmware 0.20.0 or newer: press Update on the screen after saving.",
         "no_graph": "Home Assistant has no numbers for this entity, so the graph stays empty. Choose another display.",
         "no_forecast": "This weather service has no daily forecast in Home Assistant. Choose another display.",
+        "no_meter": "Home Assistant has no numbers for this entity, so the meter stays empty. Choose another display.",
+        "meter_needs_firmware": "A meter needs firmware 0.56.0 or newer: press Update on the screen after saving.",
         "tall_cover_hint": "Uses the album cover as a dimmed background. Without artwork the normal tile remains visible.",
         "face_needs_firmware": "This clock needs firmware 0.3.6 or newer: press Update on the screen after saving. Until then the screen shows the digital clock.",
         "map_tile_needs_firmware": "The map tile needs firmware 0.21.0 or newer: press Update on the screen after saving.",
@@ -2043,7 +2095,144 @@
           "dots": "Moving dots",
           "lines": "Lines and arrows"
         }
+      },
+      "calendar": {
+        "title": "Calendar",
+        "needs_firmware": "The calendar card needs firmware 0.56.0 or newer: press Update on the screen after saving.",
+        "show": {
+          "label": "Show",
+          "events": "Events",
+          "events_hint": "Titles, what comes next, the week and the month",
+          "busy_free": "Free or busy",
+          "busy_free_hint": "Free, Starts soon or Busy in large letters, the next booking and how long it lasts",
+          "room": "Status and booking",
+          "room_hint": "Free or Busy in large letters in green or red, until when, and keys that book the room now"
+        },
+        "calendars": {
+          "label": "Calendars",
+          "hint": "Up to {n} calendars on one card, each in its own color from Home Assistant.",
+          "count": "{n} calendar | {n} calendars",
+          "own": "This tile",
+          "none": "Home Assistant has no other calendars."
+        },
+        "filter": {
+          "title": "Which events",
+          "found": "{n} event | {n} events"
+        },
+        "places": {
+          "label": "Place",
+          "hint": "Only events at these places, e.g. one meeting room. The places come from the calendars' own events; type another to add it.",
+          "add": "Add a place"
+        },
+        "words": {
+          "label": "Words in the title",
+          "hint": "Only events with one of these words in their title, and none with one of the words to leave out.",
+          "only": "Only with",
+          "hide": "Leave out",
+          "add": "Add a word"
+        },
+        "all_day": "All-day events",
+        "tentative": "Tentative events",
+        "tentative_hint": "Events that are not confirmed yet, as the calendar marks them.",
+        "private": "Hide titles",
+        "private_hint": "Every event shows as Busy, without its title or place: for a screen in a hallway or a shared room.",
+        "time": {
+          "title": "Time"
+        },
+        "ahead": "Looks ahead",
+        "ahead_hint": "How many days of events the card lists from today.",
+        "days": "{n} day | {n} days",
+        "soon": "Starts soon",
+        "soon_hint": "How long before an event the card says Starts soon.",
+        "soon_off": "Off",
+        "minutes": "{n} min | {n} min",
+        "start_view": "Full screen opens on",
+        "start_view_hint": "A tap on the card opens its full screen. Automatic shows the week where the screen has room for it, else the day.",
+        "view": {
+          "auto": "Automatic",
+          "up_next": "Up next",
+          "day": "Day",
+          "week": "Week",
+          "month": "Month"
+        },
+        "week_start": "Week starts",
+        "week_start_hint": "Today keeps the coming days in view; Monday shows the calendar week.",
+        "week_start_today": "Today",
+        "week_start_monday": "Monday",
+        "hours": "Hours",
+        "hours_hint": "The hours the week shows. Automatic follows the events, at least eight to eight; what falls outside is counted.",
+        "hours_auto": "Automatic",
+        "week_numbers": "Week numbers",
+        "week_numbers_hint": "In the month, at the left of each week.",
+        "book": {
+          "title": "Booking",
+          "on": "Book on",
+          "on_hint": "The calendar a booking from the screen goes into. Only calendars that take new events from Home Assistant, such as Local Calendar, Google and CalDAV.",
+          "none": "None of this card's calendars takes new events from Home Assistant, so the card shows no booking keys.",
+          "place": "Place",
+          "place_hint": "Written into the booking as its place, for example the room's name.",
+          "place_add": "Add a place",
+          "name": "Title",
+          "name_hint": "The booking's title in the calendar.",
+          "name_placeholder": "Booked on the screen"
+        }
+      },
+      "meter": {
+        "title": "Meter",
+        "look": "Look",
+        "styles": {
+          "ring": "Ring",
+          "tape": "Tape",
+          "bar": "Bar"
+        },
+        "range": "Range",
+        "range_hint": "Where the meter starts and ends. From Home Assistant, a sensor runs from 0 to 100, as on its gauge card; set your own for a temperature, CO2 or power.",
+        "range_ha": "From Home Assistant",
+        "range_own": "Custom",
+        "min": "Min",
+        "max": "Max",
+        "outside": "{value} is outside {min} – {max}.",
+        "set_own": "Set the range yourself",
+        "range_wrong": "The minimum must be lower than the maximum.",
+        "color": "Colour",
+        "segments": "Segments",
+        "segments_hint": "One colour for the whole meter, or two or three that change at a threshold. A threshold is a value in the sensor’s own unit.",
+        "whole": "the whole meter",
+        "up_to": "up to",
+        "above": "above that",
+        "swatch_aria": "Colour of segment {n}: {color}",
+        "own_color": "The tile’s own colour",
+        "threshold_aria": "Threshold {n}",
+        "thresholds_wrong": "Each threshold must be higher than the one before it.",
+        "reset": "Reset to default",
+        "colors": {
+          "red": "Red",
+          "pink": "Pink",
+          "purple": "Purple",
+          "deep-purple": "Deep purple",
+          "indigo": "Indigo",
+          "blue": "Blue",
+          "light-blue": "Light blue",
+          "cyan": "Cyan",
+          "teal": "Teal",
+          "green": "Green",
+          "light-green": "Light green",
+          "lime": "Lime",
+          "yellow": "Yellow",
+          "amber": "Amber",
+          "orange": "Orange",
+          "deep-orange": "Deep orange",
+          "brown": "Brown",
+          "grey": "Grey",
+          "blue-grey": "Blue grey"
+        }
       }
+    },
+    "precision": {
+      "label": "Display precision",
+      "default": "Default ({value})",
+      "note": "This is Home Assistant's own setting for this sensor, so it changes there too.",
+      "unregistered": "This sensor has no unique ID, so Home Assistant keeps no settings for it."
     },
     "tile_card": {
       "label": "{name}, slot {slot} on page {page}. Enter: configure, arrow keys: move",
@@ -2307,7 +2496,11 @@
         "all": "Update 1 screen | Update all {n} screens",
         "whats_new": "What's new in firmware {version}",
         "auto_label": "Update automatically every night",
-        "auto_hint": "Between 03:00 and 06:00, one screen at a time. Stops on an error and reports it in Home Assistant."
+        "auto_hint": "Between 03:00 and 06:00, one screen at a time. Stops on an error and reports it in Home Assistant.",
+        "reinstall_all": "Reinstall 1 screen from dev | Reinstall all {n} screens from dev",
+        "reinstall_all_hint": "Builds the newest dev for every screen, one after the other, and installs it over Wi-Fi. On dev the version number stays the same, so a new dev is never offered as an update.",
+        "reinstall_all_confirm": "Reinstall 1 screen from the newest dev? It restarts once its firmware is on. | Reinstall {n} screens from the newest dev? They are built one after the other, and each restarts once its firmware is on.",
+        "reinstall_all_go": "Reinstall"
       },
       "claude": {
         "installed": "Skill installed. Claude Code picks it up right away.",
@@ -2374,7 +2567,8 @@
       "download_target": "Download the file and flash it yourself",
       "host": "IP address or hostname",
       "download_file": "Download {name}",
-      "download_how": "Put it on the screen with {esphome_web} in Chrome or Edge: Connect, choose the screen's USB port, Install, and select this file. It holds your Wi-Fi password and the screen's keys: keep it to yourself."
+      "download_how": "Put it on the screen with {esphome_web} in Chrome or Edge: Connect, choose the screen's USB port, Install, and select this file. It holds your Wi-Fi password and the screen's keys: keep it to yourself.",
+      "waiting": "waiting its turn, 1 build first | waiting its turn, {n} builds first"
     },
     "installer": {
       "board": "Which screen do you have?",
@@ -2434,7 +2628,6 @@
       },
       "install": "Install",
       "save_profile": "Save profile",
-      "busy": "A build or installation is already running ({file}). Wait for it to finish.",
       "no_cli": "The ESPHome CLI is missing from this installation; only saving the profile is possible.",
       "progress": {
         "saved": "{file} is in the ESPHome folder",
@@ -2443,7 +2636,8 @@
         "ready": "Firmware for {name} is ready",
         "installed": "Firmware is on {name}",
         "build_failed": "Build failed",
-        "install_failed": "Install failed"
+        "install_failed": "Install failed",
+        "waiting": "Waiting its turn…"
       },
       "detail": {
         "saved": "Install it later from Firmware & USB: choose this profile, then the USB port of the Home Assistant machine, or Download to put the firmware on the screen from your own computer. Save the API key for pairing:",
@@ -2453,7 +2647,9 @@
         "downloaded": "Put it on the screen from your own computer. It shows up here once it is on your Wi-Fi.",
         "booted": "The screen boots up, connects to your Wi-Fi and joins Home Assistant by itself.",
         "booted_calibrate": "The screen boots up and connects to your Wi-Fi. It first asks for a touch calibration: tap the crosshairs. Then it joins Home Assistant by itself.",
-        "see_log": "See the log below."
+        "see_log": "See the log below.",
+        "waiting": "1 build goes first. This one starts by itself right after it, and you can leave this page. | {n} builds go first. This one starts by itself right after them, and you can leave this page.",
+        "waiting_browser": "1 build goes first. This one starts by itself right after it. Keep this page open: it writes the screen as soon as its firmware is built. | {n} builds go first. This one starts by itself right after them. Keep this page open: it writes the screen as soon as its firmware is built."
       },
       "download_steps": {
         "plug": "{bold} with a USB data cable.",
@@ -2552,7 +2748,8 @@
       "pair_yourself": "Add it in Home Assistant yourself",
       "grid": "Grid",
       "grid_hint": "The suggested grid is the best for this screen. You can change it, and which way it hangs, later beside the pages in the editor, without a new build.",
-      "grid_best": "Back to the best"
+      "grid_best": "Back to the best",
+      "waits_turn": "Another screen is being built now. This one waits its turn and starts by itself right after."
     },
     "alerts": {
       "eyebrow": "Alerts · cheatsheet",
@@ -2744,11 +2941,13 @@
       "confirm_example": "Replace the current text with the example?",
       "example_loaded": "Example loaded. Save it when you are ready.",
       "confirm_clear": "Clear the local override?",
-      "cleared": "The override will be empty after you save."
+      "cleared": "The override will be empty after you save.",
+      "checking_waits": "Waiting for the build that runs now, then checking…"
     },
     "mockup": {
       "home": "Home",
-      "unknown": "Unknown"
+      "unknown": "Unknown",
+      "calendar_free": "Free"
     },
     "pages": {
       "mode": "Editor mode",
@@ -2788,6 +2987,8 @@
       "arrange": "Arrange from Home",
       "zoom_out": "Zoom out",
       "zoom_in": "Zoom in",
+      "zoom": "Size of the pages",
+      "zoom_reset": "Back to 100%",
       "choose_destination": "Choose the destination page.",
       "move_map": "Move {name} on the map",
       "change_destination": "Change a navigation tile’s destination on {name}",
@@ -3063,6 +3264,7 @@
       "reset": "Back to {name}"
     },
     "phone": {
+      "menu": "Menu",
       "screens": "Screens",
       "add_tile": "Add tile",
       "add_to_cell": "Goes in place {cell} on {page}",
@@ -3458,12 +3660,12 @@
       "failed": "The last build of {screen} failed. The log says why.",
       "title": "Building now",
       "count": "1 build on its way | {n} builds on their way",
-      "waiting": "Waiting its turn",
       "ready": "{name} is ready",
       "ready_several": "{names} are ready",
       "update_failed": "Updating {name} failed",
       "build_failed": "Building {name} failed",
-      "show_log": "Show log"
+      "show_log": "Show log",
+      "waiting_place": "Waiting its turn, 1 build first | Waiting its turn, {n} builds first"
     },
     "grid": {
       "title": "Grid",
@@ -3482,6 +3684,22 @@
       "landscape": "Landscape",
       "portrait": "Portrait",
       "turn_hint": "When it turns, the screen starts again once to measure its new canvas."
+    },
+    "clipboard": {
+      "copied": "1 tile copied. Paste it with {key} on any page or screen | {n} tiles copied. Paste them with {key} on any page or screen",
+      "cut": "1 tile cut | {n} tiles cut",
+      "pasted": "1 tile pasted | {n} tiles pasted",
+      "pasted_pages": "{n} tiles pasted, the rest on a new page | {n} tiles pasted, the rest on {pages} new pages",
+      "pasted_some": "{n} of {total} tiles pasted. This screen has no room or no place for the others",
+      "none_fit": "Nothing pasted. This screen has no room or no place for these tiles",
+      "empty": "Nothing copied yet"
+    },
+    "selection": {
+      "title": "1 tile | {n} tiles",
+      "leave": "Leave {name} out",
+      "copy": "Copy",
+      "hint": "{copy} copies the tiles with every setting. Choose a page or a cell, here or on another screen, and press {paste}.",
+      "remove": "Remove tile | Remove {n} tiles"
     }
   }
 }

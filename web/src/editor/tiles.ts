@@ -77,6 +77,12 @@ export function placeTile(tile: Tile, target: number) {
  * on this glass (app 0.4.77), since a 2 x 2 card is too low for it on some. */
 export function startTile(id: string): Tile {
   const tile = newTile(id, useScreenStore().coversByDefault);
+  // A calendar card shows more as it gets more room (firmware 0.56.0): it starts 2 x 2 where the screen takes that size,
+  // else double width, else in one cell.
+  if (id.startsWith("calendar.")) {
+    const sizes = tileSizeChoices(tile), size = ["square", "wide"].find((choice) => sizes.includes(choice as Size));
+    return size ? { ...tile, options: { ...tile.options, size } } : tile;
+  }
   if (id !== "screen.energy") return tile;
   const { grid } = useDocumentStore().editorLayout;
   const area = (size: Size) => { const d = dimensions(size, grid); return d.columns * d.rows; };
@@ -213,8 +219,11 @@ export function resizeTile(tile: Tile, size: Size, axis: "columns" | "rows") {
     // has a plugin's tile (GitHub #224): it keeps only PLUGIN_TILE_OPTIONS, so a tile that got one before saves again.
     if (owned.content.kind === "plugin")
       for (const key of Object.keys(owned.interaction)) { if (!PLUGIN_TILE_OPTIONS.includes(key)) delete owned.interaction[key as keyof typeof owned.interaction]; }
-    else if (owned.placement.rows === 1 && dimensions(size, grid).rows > 1 && owned.interaction.controls === undefined && owned.content.kind !== "navigation")
-      owned.interaction.controls = effectiveControls(current, inventory) || "none";
+    // Nor have the map tile and the energy card: the add-on drops their controls, and a stored 'none' made it refuse the save.
+    else if (owned.placement.rows === 1 && dimensions(size, grid).rows > 1 && owned.interaction.controls === undefined && owned.content.kind !== "navigation") {
+      const controls = effectiveControls(current, inventory) || "none";
+      if (canonicalOptions(current.entity, { ...current.options, controls }).controls !== undefined) owned.interaction.controls = controls;
+    }
     Object.assign(owned.placement, dimensions(size, grid));
     if (size === "single") delete owned.appearance.presentation;
     else owned.appearance.presentation = size;
@@ -275,6 +284,17 @@ export function setTileOption(tile: Tile, key: string, value: unknown, field?: s
   tile.options = canonicalOptions(tile.entity, tile.options, tile.in !== undefined);
   normalize(layout);
   commitArrangement(layout.tiles.map((item) => ({ tile: item, slot: item.slot })), field);
+}
+/** Several choices of a tile at once, as one step of undo: a preset that sets more than one (the calendar card's Free or
+ * busy also turns Starts soon on). Only for choices that leave the tile's size, face and controls alone. */
+export function setTileOptions(tile: Tile, changes: Record<string, unknown>) {
+  const doc = useDocumentStore();
+  if (!doc.layout) return;
+  const layout = pages.clone(doc.layout);
+  tile = currentView(tile, layout) || tile;
+  tile.options = canonicalOptions(tile.entity, { ...tile.options, ...changes }, tile.in !== undefined);
+  doc.editorLayout.normalize(layout);
+  commitArrangement(layout.tiles.map((item) => ({ tile: item, slot: item.slot })));
 }
 // A navigation tile goes to another page: its entity changes (screen.page_<n>). One tile per page it goes to, unless the
 // firmware takes several (0.2.65). The page after the last one becomes a new, empty page to fill (app 0.2.78).

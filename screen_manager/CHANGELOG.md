@@ -1,3 +1,136 @@
+## 0.4.88 (firmware 0.56.0)
+
+- **A screen that runs well no longer shows an old failed update.** An update that failed (for instance because another
+  build was running at that moment) no longer shows as an error with a red light once the screen runs the version it
+  went for, installed another way or by a later update.
+- **Editor: large screens get room.** A page of an 8- or 10-inch screen is drawn larger, as large as its glass up to
+  what fits in the window, instead of the same size as a 4-inch one. A zoom in the corner below the pages makes every
+  page larger or smaller (50 to 200 %; a click on the percentage goes back to 100 %), and the browser remembers it.
+- **Editor: columns and rows are a screen setting.** The grid moved from the pages' toolbar to Screen settings, as the
+  first card. A preview screen gets the Settings tab with just that card.
+- **Editor on a phone: the sidebar is back.** A menu key on the overview, on a screen and on every other page opens the
+  whole sidebar from the left: every screen with its details (update, rename, files, remove), Plugins, Alerts and
+  Settings.
+- **Editor on a phone: a page keeps its size.** Every page of a screen is now drawn at the full width of the phone.
+  Before, a page took the width of what was on it, so one page stood a little wider or narrower than the next.
+- **Editor: choose several tiles, and copy them to another page or screen.** ⌘ (or Ctrl) or Shift with a click adds
+  a tile to the choice, and a band dragged with the mouse from beside the tiles chooses every tile it touches; ⌘A
+  chooses the whole page. ⌘C copies the tiles with every setting, ⌘X cuts them and ⌘V pastes them on the chosen page
+  (at the empty cell marked on it, if there is one), on this screen or another one. The group keeps its arrangement
+  where it fits; what the page has no room for goes on new pages right after it, so tiles from a large screen spread
+  over the pages of a smaller one, each in the largest size that screen has for it. Delete removes them all, and undo
+  brings back a paste, a cut or a removal in one step.
+- **Editor: dragging a tile works on Android.** In Chrome on Android (also in the Home Assistant app) a tile carried
+  over another one went back to its place halfway, because the page began to scroll under the finger. Holding a tile
+  also no longer selects text or opens the browser's menu.
+- **Screens keep taking new layouts.** On a screen that keeps its pages (every board with PSRAM), a layout that added or
+  took away a page left what the old cards had drawn behind in the memory inside the chip. After a few such changes a
+  4-inch Guition refused new layouts until it was restarted, or lost Wi-Fi. That memory now comes back with every
+  layout, and the points a card draws its lines through live in PSRAM.
+- **Screens with plugin tiles stay up.** A plugin tile's options and data, and the buffers a picture is downloaded
+  with, now live in the screen's PSRAM instead of the small memory inside the chip that Wi-Fi needs. On a 4-inch
+  Guition with a few plugin tiles and pictures that memory could run out at a busy moment: the screen restarted, or lost
+  Wi-Fi until it was restarted.
+- **One line for every build: nothing is refused because something else builds.** The app builds one firmware at a
+  time, and an update, a plugin build, New screen and Firmware & USB now all wait their turn in the same line. Update on
+  a second screen while the first one updates waits its turn (before, it showed a 2 and fell back). Update all adds
+  the screens that are not on their way yet. New screen, Firmware & USB and the YAML check go before the updates and
+  plugin builds that wait, and say what they wait for. A plugin added while the screen's update waits comes with that
+  update in one build. An update on a board with 4 MB keeps the line until all of its steps are done, so no other build
+  starts while its screen restarts. Each build keeps how it ended and its log, so the editor says the right outcome
+  also when the next build started at once.
+- **The dev app says it is the dev app, and reinstalls every screen from dev in one go.** Added from the `#dev`
+  repository, the app shows a small dev chip beside its name, Reinstall from dev stands in each screen's details under
+  its firmware, and Settings, Updates has Reinstall all from dev, which builds every screen with the newest dev, one
+  after the other.
+- **Editor: a map tile grown to two rows saves at once.** Dragging a new map tile (or an energy card) from one row to
+  two gave it a setting the app does not keep for it, and the save asked to adjust the tile's settings first.
+- **Plugin API 0.10: pictures on a plugin's tile.** A plugin can lay out places for pictures on its tile and name an
+  address for each (a film's poster beside its title), and the screen shows them the way it shows a camera tile or an
+  album cover: the app fetches each picture once, from a host the plugin's manifest names or from Home Assistant's own
+  pictures of the tile's entity, cuts or fits it to its place and sends all the places of a tile as one picture. The
+  manifest says how many places a tile has (`pictures`). A board without the memory for pictures shows the tile
+  without them. Also a label of several lines for a plugin's tile, and where a finger tapped a tile, so a list or a
+  row of posters knows which one. The places of a tile may overlap, and a picture can be turned in perspective and
+  get a reflection under it, drawn by the app, so a plugin can make a cover flow. The plugins repository's docs say how.
+- **Live camera on the P4 boards: the panel keeps up, and a live tile never stays where its card was.** The PPA, which
+  scales and turns every live picture and, on a turned glass, every flush of LVGL, moves in bursts of 64 bytes instead
+  of 128, so the panel's own DMA gets its turn on the memory bus; a frame of blue (the panel's colour for no data, seen
+  on the Guition 10.1-inch P4 while a camera streamed) is what it showed when it did not. The screen counts how often
+  the panel ran dry and writes it in every stream report, so a log tells whether it still happens. LVGL and the streams
+  take turns on the glass (LVGL for a whole refresh, a stream for a copy), so a tile's name no longer stands over its
+  live picture after the camera full screen closes. A live tile whose card moved on the glass stops at once and asks
+  again from where the card is.
+- **Meters for sensors.** A sensor tile can show where its value stands as a ring, a tape or a bar of cells, on any size
+  from one cell to the whole page, growing with the room it gets. The range comes from Home Assistant (0 to 100 for a
+  percentage) or is the tile's own, and the colour is one, or two or three segments (green, orange and red by default)
+  up to thresholds in the sensor's own unit, each colour and threshold yours to change. Choose Meter under Display. The
+  screen needs this firmware.
+- **Decimals the way Home Assistant does them.** A sensor's tile and its top bar item have Home Assistant's own Display
+  precision: Default, or 0 to 6 decimals, each shown with the sensor's value now. It is Home Assistant's setting for the
+  sensor, so choosing it in the editor changes it in Home Assistant too, and every tile, meter, top bar item and
+  dashboard follows.
+- **Durations in hours and minutes.** A duration sensor in minutes, hours or days shows as Home Assistant shows it:
+  "1h 30m" instead of "1.50 h" and "12m" instead of "0.20 h", in the screen's language, on tiles, meters, cards and the
+  top bar (wishlist 107).
+- **An entity in the top bar opens its card.** A tap on an entity's item in the top bar opens the card that holding its
+  tile opens, and does nothing else: a switch or a lamp there opens its card instead of switching, a sensor its
+  history. It works whether or not the entity also has a tile, and the screen needs this firmware.
+- **The colour card follows the light while it is open.** A light's colour, white shade or brightness changed elsewhere
+  (in Home Assistant, by an automation, on another screen) now moves its sliders at once, and a colour or white shade
+  you set shows on the light's tile straight away. The brightness slider sends what the tile's own slider sends. The
+  screen needs this firmware.
+- **More room on the CYD and the other 4 MB screens.** Their icons are stored with four shades of edge instead of
+  sixteen, which frees about 80 KB of their firmware for plugins and later features. The icons look the same at the
+  size these screens draw them. Larger screens keep the finer icons. The screen needs this firmware.
+- **Plugins have pictures.** A plugin whose maker added one shows a picture across the top of its card on the Plugins
+  page and large above its details: the plugin on a few screens, with its name and what it does. Makers make one with
+  the plugins repository's new `tools/store_image.py`, from the real firmware of the bench.
+- **A dark screen saves power.** In standby or Sleep at brightness 0 the screen stops drawing and lets its Wi-Fi doze
+  between the router's beacons, so a screen on a battery lasts longer. It stays connected: Home Assistant still sees it
+  and can wake it, alerts still arrive, and a tap wakes it as before. Waking fades the light in over 200 ms instead of
+  switching it on at once. The screen needs this firmware.
+- **A calendar card.** Put a Home Assistant calendar on a screen, or several calendars on one card in Home Assistant's
+  own colours. The card shows more as it gets bigger: what is on now in one cell, the next event large on a bigger tile,
+  then a list of what follows, and on a large screen the whole week. A tap opens the full screen with the day, the week,
+  the month and every event's details, and on large screens the hours scroll. Filter by calendar, by place (one meeting
+  room), by words in the title, all-day and tentative events, or show only Free, Starts soon and Busy with the titles
+  hidden. "Status and booking" turns a card into a meeting room's sign: Free or Busy in large letters in green or red,
+  until when, the room's day beside it on a large card, and keys that book the room now (15 min, 30 min, 1 h or until
+  the next meeting) in a calendar that takes new events, with the place and title you choose. A week can start on
+  Monday, show fixed hours (8 to 18) and the month its week numbers; the full screen shows or hides each calendar from
+  its view key. The screen needs this firmware.
+- **A new board, experimental: the Elecrow CrowPanel Advanced 10.1-inch ESP32-P4** (V1.1 and V1.2), 1024 x 600 glass
+  with GT911 touch, a dimmable backlight, and its speaker and microphone as the screen's audio, so audio plugins such as
+  a voice assistant fit it. Built from Elecrow's own ESPHome example and a configuration a community member ran on the
+  board (#116). Choose it under New screen.
+- **Plugin API 0.9: large digits and colours by meaning for plugins.** A plugin's tile can show its numbers in the large
+  digits Tessera's own climate card uses for its setpoint, so a count or a reading fills a large tile. It costs no
+  flash: the font is already on every screen, and a value with letters in it stays in the plugin's usual size. Bars and
+  dots of a plugin take the same green, amber and red as Home Assistant, in light and dark, for a level that is good,
+  moderate or bad. A plugin's one-line text now stays on one line and ends in dots on a narrow tile, instead of running
+  under it. A plugin that uses the new parts needs this firmware.
+- **Bluetooth for plugins on every ESP32-P4 screen.** The app now knows which screens can run Bluetooth beside the
+  screen: every board with an ESP32-P4, whose ESP32-C6 does Wi-Fi and Bluetooth. A plugin that needs it, such as the
+  new Bluetooth proxy plugin for Home Assistant, is offered only on those screens. ESP32-S3 screens with an RGB panel
+  are left out: they lack the memory for it.
+- **reTerminal D1001: touch works after a flat battery.** When the screen started from no power at all (an empty
+  battery, or the first time it is switched on), it showed its pages but did not react to a finger until it was
+  restarted. The touch now starts after the panel has its power. The screen needs this firmware.
+- **reTerminal D1001: no false battery level while it charges.** Plugged in, the level jumped up by as much as 20 %,
+  because a charging battery reads higher than it holds, and fell back after unplugging. Now the top bar shows only the
+  charging bolt while it charges, without a number, and the level comes back two minutes after unplugging, once the
+  battery has settled. On the battery it only goes down. On any screen, charging without a known level now shows the
+  charging bolt instead of an unknown battery. The screen needs this firmware.
+- **Going back.** A layout with a calendar card or a meter can't be read by an older app, so after this update go back
+  to 0.4.87 only with a backup taken before it.
+- Checked with every Python, C++, editor, translation and WASM preview check, the layout audit of every card on every
+  board shape, and firmware builds of every board on ESPHome 2026.9.0 and, where the board allows it, 2026.6.2. The
+  upgrade from 0.4.87 was tested on a CYD, a 4-inch Guition and a Waveshare 4.3-inch: main's app and firmware first, the
+  new app with the old firmware, then each screen's own Update built from GitHub, and on the CYD the other order (the
+  old app with the new firmware). Every layout came through byte for byte, and pages, taps, cards, settings, standby and
+  the wake were checked on the glass. After the upgrade the screens got calendar cards, meters and a plugin with
+  pictures, built through the one build line, and were checked on the glass again.
 ## 0.4.87 (firmware 0.55.0)
 
 - **Plugins for everyone.** The Plugins page is now in every Tessera app, not only the dev app: add a tile, a top bar

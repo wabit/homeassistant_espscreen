@@ -586,6 +586,43 @@
     },
     "plugin": {
       "missing": "Plugin ausente"
+    },
+    "calendar": {
+      "free": "Livre",
+      "busy": "Ocupado",
+      "starts_soon": "Começa em breve",
+      "private": "Ocupado",
+      "all_day": "Todo o dia",
+      "today": "Hoje",
+      "tomorrow": "Amanhã",
+      "nothing": "Nada planeado",
+      "nothing_more": "Mais nada esta semana",
+      "until": "Até {x}",
+      "next": "Seguinte {x}",
+      "left": "Faltam {x}",
+      "in": "Em {x}",
+      "more": "Mais {x}",
+      "earlier": "{x} antes",
+      "later": "{x} depois",
+      "more_week": "Mais {x} esta semana",
+      "days_view": "{x} dias",
+      "views": [
+        "A seguir",
+        "Dia",
+        "Semana",
+        "Mês"
+      ],
+      "view_notes": [
+        "O que decorre agora e o que vem a seguir",
+        "Um dia, toque na faixa para o escolher",
+        "Dias lado a lado, horas para baixo",
+        "O mês num relance, toque para abrir um dia"
+      ],
+      "today_key": "Hoje",
+      "booking": "A reservar…",
+      "calendars": "Calendários",
+      "also": "+{x} agora",
+      "booked": "Reservado no ecrã"
     }
   },
   "addon": {
@@ -707,6 +744,7 @@
         "no_small_slider": "{name} não tem no Home Assistant nada que um controlo deslizante pequeno possa alterar.",
         "no_graph": "{name} não tem valores numéricos para desenhar um gráfico.",
         "no_forecast": "{name} não tem previsão diária no Home Assistant.",
+        "no_meter": "{name} não tem valores numéricos para mostrar num medidor.",
         "no_control": "O Home Assistant não oferece esse controlo direto para {name}."
       },
       "alerts": {
@@ -755,7 +793,8 @@
         "build_first": "Compile primeiro o firmware; a transferência aparece quando a compilação terminar.",
         "unknown_action": "Ação de firmware desconhecida.",
         "host": "Introduza o endereço IP ou o nome do anfitrião do ecrã pretendido.",
-        "grid": "Escolha uma grelha que este ecrã aceite."
+        "grid": "Escolha uma grelha que este ecrã aceite.",
+        "build_gone": "Esta compilação já não é conhecida. As mais recentes estão em Firmware e USB."
       },
       "updates": {
         "automatic": "Escolha se as atualizações automáticas ficam ativadas ou desativadas.",
@@ -767,7 +806,9 @@
         "no_profile": "Não foi encontrado nenhum perfil ESPHome para este ecrã. Verifique o nome na pasta do ESPHome.",
         "ip_unknown": "Endereço IP desconhecido. Introduza-o uma vez; depois disso, o firmware novo passa a comunicá-lo sozinho.",
         "all_updated": "Todos os ecrãs acessíveis já estão atualizados.",
-        "reinstall_dev": "Reinstalar o mesmo firmware só é possível no canal dev."
+        "reinstall_dev": "Reinstalar o mesmo firmware só é possível no canal dev.",
+        "all_on_the_way": "Todos os ecrãs com uma atualização já a têm a caminho.",
+        "nothing_to_reinstall": "Agora nenhum ecrã pode ser reinstalado: cada um está offline, já a caminho ou sem perfil nesta app."
       },
       "remove": {
         "not_allowed": "Esta aplicação não pode remover uma integração do Home Assistant. Remova o ecrã no próprio Home Assistant, em Configuração → Dispositivos & serviços.",
@@ -870,7 +911,8 @@
       },
       "extras": {
         "request": "Esta alteração de um extra não é possível neste ecrã."
-      }
+      },
+      "display_precision_unregistered": "O Home Assistant não guarda definições para este sensor porque ele não tem um ID único, por isso a precisão de apresentação só pode ser definida no YAML dele."
     },
     "status": {
       "first_tiles": "Escolha os primeiros mosaicos",
@@ -1466,7 +1508,6 @@
       "refresh": "Recarregar",
       "update": {
         "button": "Atualizar",
-        "queued": "Na fila para atualizar",
         "available": "Atualização para {version}",
         "no_profile": "Não foi encontrado nenhum perfil ESPHome com este nome de dispositivo.",
         "whats_new": "Novidades",
@@ -1475,7 +1516,8 @@
         "reinstall": "Reinstalar a partir do dev",
         "reinstall_why": "Compila de novo este ecrã a partir do dev mais recente e instala-o por Wi-Fi. No dev o número da versão não muda, por isso um dev novo nunca é oferecido como atualização.",
         "in_tessera": "Atualize primeiro no Tessera",
-        "in_tessera_why": "Atualize primeiro este ecrã aqui no Tessera. Ainda tem a divisão da flash da primeira instalação e o firmware atual já não cabe, por isso o ESPHome Device Builder não o consegue atualizar. O Tessera passa-o pelo caminho para a nova divisão e mantém as definições. Depois, ambos os caminhos funcionam."
+        "in_tessera_why": "Atualize primeiro este ecrã aqui no Tessera. Ainda tem a divisão da flash da primeira instalação e o firmware atual já não cabe, por isso o ESPHome Device Builder não o consegue atualizar. O Tessera passa-o pelo caminho para a nova divisão e mantém as definições. Depois, ambos os caminhos funcionam.",
+        "reinstall_short": "Compila a dev mais recente e instala-a por Wi-Fi."
       },
       "host": {
         "hint": "O endereço IP, só desta vez; o firmware novo passa a comunicá-lo sozinho.",
@@ -1516,7 +1558,8 @@
         "done": "{name} foi removido.",
         "kept": "{name} foi removido. O seu perfil {file} continua na pasta ESPHome."
       },
-      "home": "Visão geral dos seus ecrãs"
+      "home": "Visão geral dos seus ecrãs",
+      "dev_chip": "Esta é a versão dev da app: cada ecrã que compila vem do ramo dev."
     },
     "palette": {
       "groups": {
@@ -1674,6 +1717,8 @@
         "add": "Clique num espaço vazio e depois em algo da biblioteca. Ou arraste-o para a página.",
         "move_label": "Mover",
         "move": "Arraste um mosaico. Largue-o na página seguinte para uma página nova.",
+        "copy_label": "Copiar",
+        "copy": "Mantenha {mod} ou Shift e clique nos mosaicos, ou arraste uma moldura a partir do lado. {copy} e depois {paste} noutra página ou ecrã.",
         "pages_label": "Páginas",
         "pages": "Arraste uma página pelo número. O resto está no menu ···.",
         "map_label": "Mapa",
@@ -1681,7 +1726,8 @@
         "preview_label": "Pré-visualizar",
         "preview": "Experimente deslizar e os mosaicos de página. Nada muda em casa."
       },
-      "copy_needs_migration": "Abra uma vez o ecrã de origem para que a disposição passe para páginas e depois copie-a."
+      "copy_needs_migration": "Abra uma vez o ecrã de origem para que a disposição passe para páginas e depois copie-a.",
+      "removed_several": "1 mosaico removido | {n} mosaicos removidos"
     },
     "page": {
       "label": "Página {page}",
@@ -1726,7 +1772,8 @@
         "screen": "Ecrã",
         "alarm_control_panel": "Alarme",
         "lock": "Fechaduras",
-        "humidifier": "Humidificadores"
+        "humidifier": "Humidificadores",
+        "calendar": "Calendários"
       },
       "room": "Divisão",
       "hide_placed": "Ocultar adicionadas",
@@ -2149,13 +2196,15 @@
       "entity": "Entidade",
       "alarm_control_panel": "Painel de alarme",
       "lock": "Fechadura",
-      "humidifier": "Humidificador"
+      "humidifier": "Humidificador",
+      "calendar": "Calendário"
     },
     "displays": {
       "standard": "padrão",
       "watch": "valor grande",
       "forecast": "previsão do tempo",
       "graph": "gráfico",
+      "meter": "medidor",
       "digital": "relógio digital",
       "analog": "relógio analógico",
       "dial": "mostrador simples",
@@ -2195,6 +2244,7 @@
         "watch": "Valor grande",
         "forecast": "Previsão do tempo",
         "graph": "Gráfico",
+        "meter": "Medidor",
         "sunpath": "Trajetória do sol",
         "live": "Imagem ao vivo",
         "live_needs_firmware": "Uma imagem ao vivo precisa do firmware 0.2.77 ou mais recente: prima Atualizar no ecrã depois de guardar.",
@@ -2208,6 +2258,8 @@
         "map_needs_firmware": "Um mapa precisa do firmware 0.20.0 ou mais recente: carregue em Atualizar no ecrã depois de guardar.",
         "no_graph": "O Home Assistant não tem valores numéricos para esta entidade, por isso o gráfico fica vazio. Escolha outra apresentação.",
         "no_forecast": "Este serviço meteorológico não tem previsão diária no Home Assistant. Escolha outra apresentação.",
+        "no_meter": "O Home Assistant não tem valores numéricos para esta entidade, por isso o medidor fica vazio. Escolha outra apresentação.",
+        "meter_needs_firmware": "Um medidor precisa do firmware 0.56.0 ou mais recente: carregue em Atualizar no ecrã depois de guardar.",
         "tall_cover_hint": "",
         "face_needs_firmware": "Este relógio precisa do firmware 0.3.6 ou mais recente: prima Atualizar no ecrã depois de guardar. Até lá, o ecrã mostra o relógio digital.",
         "map_tile_needs_firmware": "O mosaico de mapa precisa do firmware 0.21.0 ou mais recente: carregue em Atualizar no ecrã depois de guardar.",
@@ -2404,7 +2456,144 @@
           "dots": "Pontos em movimento",
           "lines": "Linhas e setas"
         }
+      },
+      "calendar": {
+        "title": "Calendário",
+        "needs_firmware": "O cartão de calendário precisa do firmware 0.56.0 ou mais recente: depois de guardar, prima Atualizar no ecrã.",
+        "show": {
+          "label": "Mostrar",
+          "events": "Eventos",
+          "events_hint": "Títulos, o que vem a seguir, a semana e o mês",
+          "busy_free": "Livre ou ocupado",
+          "busy_free_hint": "Livre, Começa em breve ou Ocupado em letras grandes, a próxima reserva e quanto dura",
+          "room": "Estado e reserva",
+          "room_hint": "Livre ou Ocupado em grande, a verde ou vermelho, até quando, e teclas que reservam a sala agora"
+        },
+        "calendars": {
+          "label": "Calendários",
+          "hint": "Até {n} calendários num cartão, cada um com a sua cor do Home Assistant.",
+          "count": "{n} calendário | {n} calendários",
+          "own": "Este mosaico",
+          "none": "O Home Assistant não tem outros calendários."
+        },
+        "filter": {
+          "title": "Que eventos",
+          "found": "{n} evento | {n} eventos"
+        },
+        "places": {
+          "label": "Local",
+          "hint": "Só eventos nestes locais, por exemplo uma sala de reuniões. Os locais vêm dos próprios eventos dos calendários; escreva outro para o adicionar.",
+          "add": "Adicionar um local"
+        },
+        "words": {
+          "label": "Palavras no título",
+          "hint": "Só eventos com uma destas palavras no título, e nenhum com uma das palavras a omitir.",
+          "only": "Só com",
+          "hide": "Omitir",
+          "add": "Adicionar uma palavra"
+        },
+        "all_day": "Eventos de dia inteiro",
+        "tentative": "Eventos provisórios",
+        "tentative_hint": "Eventos ainda não confirmados, tal como o calendário os marca.",
+        "private": "Ocultar títulos",
+        "private_hint": "Cada evento aparece como Ocupado, sem título nem local: para um ecrã num corredor ou numa sala partilhada.",
+        "time": {
+          "title": "Tempo"
+        },
+        "ahead": "Dias à frente",
+        "ahead_hint": "Quantos dias de eventos o cartão lista a partir de hoje.",
+        "days": "{n} dia | {n} dias",
+        "soon": "Começa em breve",
+        "soon_hint": "Quanto tempo antes de um evento o cartão diz Começa em breve.",
+        "soon_off": "Desligado",
+        "minutes": "{n} min | {n} min",
+        "start_view": "O ecrã inteiro abre em",
+        "start_view_hint": "Um toque no cartão abre o seu ecrã inteiro. Automático mostra a semana quando o ecrã tem espaço para ela, senão o dia.",
+        "view": {
+          "auto": "Automático",
+          "up_next": "A seguir",
+          "day": "Dia",
+          "week": "Semana",
+          "month": "Mês"
+        },
+        "week_start": "A semana começa",
+        "week_start_hint": "Hoje mantém à vista os próximos dias; segunda-feira mostra a semana do calendário.",
+        "week_start_today": "Hoje",
+        "week_start_monday": "Segunda-feira",
+        "hours": "Horas",
+        "hours_hint": "As horas que a semana mostra. Automático segue os eventos, pelo menos das oito às oito; o que fica de fora é contado.",
+        "hours_auto": "Automático",
+        "week_numbers": "Números das semanas",
+        "week_numbers_hint": "No mês, à esquerda de cada semana.",
+        "book": {
+          "title": "Reserva",
+          "on": "Reservar em",
+          "on_hint": "O calendário onde entra uma reserva feita no ecrã. Só calendários que aceitam novos eventos do Home Assistant, como Local Calendar, Google e CalDAV.",
+          "none": "Nenhum calendário deste cartão aceita novos eventos do Home Assistant, por isso o cartão não mostra teclas de reserva.",
+          "place": "Local",
+          "place_hint": "Escrito como local da reserva, por exemplo o nome da sala.",
+          "place_add": "Adicionar um local",
+          "name": "Título",
+          "name_hint": "O título da reserva no calendário.",
+          "name_placeholder": "Reservado no ecrã"
+        }
+      },
+      "meter": {
+        "title": "Medidor",
+        "look": "Forma",
+        "styles": {
+          "ring": "Anel",
+          "tape": "Régua",
+          "bar": "Barra"
+        },
+        "range": "Intervalo",
+        "range_hint": "Onde o medidor começa e acaba. Do Home Assistant, um sensor vai de 0 a 100, como no seu cartão de medidor; defina o seu próprio para uma temperatura, o CO2 ou a potência.",
+        "range_ha": "Do Home Assistant",
+        "range_own": "Próprio",
+        "min": "Mín",
+        "max": "Máx",
+        "outside": "{value} está fora de {min} – {max}.",
+        "set_own": "Definir o intervalo",
+        "range_wrong": "O mínimo tem de ser inferior ao máximo.",
+        "color": "Cor",
+        "segments": "Segmentos",
+        "segments_hint": "Uma cor para todo o medidor, ou duas ou três que mudam num limiar. Um limiar é um valor na unidade do próprio sensor.",
+        "whole": "todo o medidor",
+        "up_to": "até",
+        "above": "acima",
+        "swatch_aria": "Cor do segmento {n}: {color}",
+        "own_color": "A cor própria do mosaico",
+        "threshold_aria": "Limiar {n}",
+        "thresholds_wrong": "Cada limiar tem de ser superior ao anterior.",
+        "reset": "Repor predefinições",
+        "colors": {
+          "red": "Vermelho",
+          "pink": "Rosa",
+          "purple": "Roxo",
+          "deep-purple": "Roxo escuro",
+          "indigo": "Índigo",
+          "blue": "Azul",
+          "light-blue": "Azul claro",
+          "cyan": "Ciano",
+          "teal": "Azul-petróleo",
+          "green": "Verde",
+          "light-green": "Verde claro",
+          "lime": "Lima",
+          "yellow": "Amarelo",
+          "amber": "Âmbar",
+          "orange": "Laranja",
+          "deep-orange": "Laranja escuro",
+          "brown": "Castanho",
+          "grey": "Cinzento",
+          "blue-grey": "Cinzento azulado"
+        }
       }
+    },
+    "precision": {
+      "label": "Mostrar precisão",
+      "default": "Predefinição ({value})",
+      "note": "É a definição do próprio Home Assistant para este sensor, por isso muda lá também.",
+      "unregistered": "Este sensor não tem um ID único, por isso o Home Assistant não guarda definições para ele."
     },
     "tile_card": {
       "label": "{name}, espaço {slot} da página {page}. Enter: configurar; teclas de seta: mover",
@@ -2668,7 +2857,11 @@
         "all": "Atualizar {n} ecrã | Atualizar os {n} ecrãs",
         "whats_new": "Novidades do firmware {version}",
         "auto_label": "Atualizar automaticamente todas as noites",
-        "auto_hint": "Entre as 03:00 e as 06:00, um ecrã de cada vez. Para se houver um erro e comunica-o no Home Assistant."
+        "auto_hint": "Entre as 03:00 e as 06:00, um ecrã de cada vez. Para se houver um erro e comunica-o no Home Assistant.",
+        "reinstall_all": "Reinstalar 1 ecrã a partir de dev | Reinstalar os {n} ecrãs a partir de dev",
+        "reinstall_all_hint": "Compila a dev mais recente para cada ecrã, um após o outro, e instala-a por Wi-Fi. Em dev o número da versão não muda, por isso uma dev nova nunca é oferecida como atualização.",
+        "reinstall_all_confirm": "Reinstalar 1 ecrã a partir da dev mais recente? Reinicia assim que tiver o firmware. | Reinstalar {n} ecrãs a partir da dev mais recente? São compilados um após o outro, e cada um reinicia assim que tiver o firmware.",
+        "reinstall_all_go": "Reinstalar"
       },
       "claude": {
         "installed": "Habilidade instalada. O Claude Code deteta-a de imediato.",
@@ -2735,7 +2928,8 @@
       "download_target": "Transferir o ficheiro e gravá-lo você mesmo",
       "host": "Endereço IP ou nome do anfitrião",
       "download_file": "Descarregar {name}",
-      "download_how": "Instale-o no ecrã com o {esphome_web} no Chrome ou no Edge: Connect, escolha a porta USB do ecrã, Install e selecione este ficheiro. Contém a sua palavra-passe de Wi-Fi e as chaves do ecrã: não o partilhe."
+      "download_how": "Instale-o no ecrã com o {esphome_web} no Chrome ou no Edge: Connect, escolha a porta USB do ecrã, Install e selecione este ficheiro. Contém a sua palavra-passe de Wi-Fi e as chaves do ecrã: não o partilhe.",
+      "waiting": "à espera, 1 compilação antes | à espera, {n} compilações antes"
     },
     "installer": {
       "board": "Que ecrã tem?",
@@ -2795,7 +2989,6 @@
       },
       "install": "Instalar",
       "save_profile": "Guardar perfil",
-      "busy": "Já está a decorrer uma compilação ou instalação ({file}). Aguarde que termine.",
       "no_cli": "Falta a CLI do ESPHome nesta instalação; só é possível guardar o perfil.",
       "progress": {
         "saved": "{file} está na pasta do ESPHome",
@@ -2804,7 +2997,8 @@
         "ready": "O firmware para {name} está pronto",
         "installed": "O firmware já está em {name}",
         "build_failed": "A compilação falhou",
-        "install_failed": "A instalação falhou"
+        "install_failed": "A instalação falhou",
+        "waiting": "À espera da sua vez…"
       },
       "detail": {
         "saved": "Instale-o mais tarde a partir de Firmware e USB: escolha este perfil e depois a porta USB da máquina do Home Assistant, ou Descarregar para instalar o firmware no ecrã a partir do seu próprio computador. Guarde a chave API para o emparelhamento:",
@@ -2814,7 +3008,9 @@
         "downloaded": "Instale-o no ecrã a partir do seu computador. Aparece aqui assim que estiver na sua Wi-Fi.",
         "booted": "O ecrã arranca, liga-se à sua Wi-Fi e junta-se ao Home Assistant sozinho.",
         "booted_calibrate": "O ecrã arranca e liga-se à sua Wi-Fi. Primeiro pede uma calibração do toque: toque nas cruzes. Depois junta-se ao Home Assistant sozinho.",
-        "see_log": "Consulte o registo abaixo."
+        "see_log": "Consulte o registo abaixo.",
+        "waiting": "Antes vai 1 compilação. Esta começa sozinha logo a seguir, e podes sair desta página. | Antes vão {n} compilações. Esta começa sozinha logo a seguir, e podes sair desta página.",
+        "waiting_browser": "Antes vai 1 compilação. Esta começa sozinha logo a seguir. Mantém esta página aberta: escreve o ecrã assim que o firmware estiver compilado. | Antes vão {n} compilações. Esta começa sozinha logo a seguir. Mantém esta página aberta: escreve o ecrã assim que o firmware estiver compilado."
       },
       "download_steps": {
         "plug": "{bold} com um cabo USB de dados.",
@@ -2913,7 +3109,8 @@
       "pair_yourself": "Adicioná-lo você mesmo no Home Assistant",
       "grid": "Grelha",
       "grid_hint": "A grelha proposta é a melhor para este ecrã. Pode alterá-la, e a orientação, mais tarde ao lado das páginas no editor, sem nova compilação.",
-      "grid_best": "Voltar à melhor"
+      "grid_best": "Voltar à melhor",
+      "waits_turn": "Outro ecrã está a ser compilado agora. Este espera a sua vez e começa sozinho logo a seguir."
     },
     "alerts": {
       "eyebrow": "Alertas · guia rápido",
@@ -3105,11 +3302,13 @@
       "confirm_example": "Substituir o texto atual pelo exemplo?",
       "example_loaded": "Exemplo carregado. Guarde-o quando estiver pronto.",
       "confirm_clear": "Limpar o YAML personalizado local?",
-      "cleared": "O YAML personalizado ficará vazio quando guardar."
+      "cleared": "O YAML personalizado ficará vazio quando guardar.",
+      "checking_waits": "À espera da compilação em curso, depois verifica…"
     },
     "mockup": {
       "home": "Casa",
-      "unknown": "Desconhecido"
+      "unknown": "Desconhecido",
+      "calendar_free": "Livre"
     },
     "pages": {
       "mode": "Modo do editor",
@@ -3149,6 +3348,8 @@
       "arrange": "Organizar a partir do início",
       "zoom_out": "Reduzir zoom",
       "zoom_in": "Aumentar zoom",
+      "zoom": "Tamanho das páginas",
+      "zoom_reset": "Voltar a 100%",
       "choose_destination": "Escolha a página de destino.",
       "move_map": "Mover {name} no mapa",
       "change_destination": "Alterar o destino de um cartão de navegação em {name}",
@@ -3424,6 +3625,7 @@
       "reset": "Voltar a {name}"
     },
     "phone": {
+      "menu": "Menu",
       "screens": "Ecrãs",
       "add_tile": "Adicionar mosaico",
       "add_to_cell": "Vai para o lugar {cell} de {page}",
@@ -3458,12 +3660,12 @@
       "failed": "A última compilação de {screen} falhou. O registo diz porquê.",
       "title": "A compilar agora",
       "count": "1 compilação em curso | {n} compilações em curso",
-      "waiting": "À espera da sua vez",
       "ready": "{name} está pronto",
       "ready_several": "{names} estão prontos",
       "update_failed": "A atualização de {name} falhou",
       "build_failed": "A compilação de {name} falhou",
-      "show_log": "Ver registo"
+      "show_log": "Ver registo",
+      "waiting_place": "À espera, 1 compilação antes | À espera, {n} compilações antes"
     },
     "grid": {
       "title": "Grelha",
@@ -3482,6 +3684,22 @@
       "landscape": "Horizontal",
       "portrait": "Vertical",
       "turn_hint": "Ao rodar, o ecrã reinicia uma vez para medir a nova imagem."
+    },
+    "clipboard": {
+      "copied": "1 mosaico copiado. Cole-o com {key} em qualquer página ou ecrã | {n} mosaicos copiados. Cole-os com {key} em qualquer página ou ecrã",
+      "cut": "1 mosaico cortado | {n} mosaicos cortados",
+      "pasted": "1 mosaico colado | {n} mosaicos colados",
+      "pasted_pages": "{n} mosaicos colados, o resto numa página nova | {n} mosaicos colados, o resto em {pages} páginas novas",
+      "pasted_some": "{n} de {total} mosaicos colados. Este ecrã não tem espaço para os outros",
+      "none_fit": "Nada foi colado. Este ecrã não tem espaço para estes mosaicos",
+      "empty": "Ainda nada foi copiado"
+    },
+    "selection": {
+      "title": "1 mosaico | {n} mosaicos",
+      "leave": "Retirar {name} da seleção",
+      "copy": "Copiar",
+      "hint": "{copy} copia os mosaicos com todas as definições. Escolha uma página ou uma célula, aqui ou noutro ecrã, e prima {paste}.",
+      "remove": "Remover mosaico | Remover {n} mosaicos"
     }
   }
 }

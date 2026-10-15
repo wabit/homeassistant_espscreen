@@ -40,6 +40,8 @@ inline Kind kind(const std::string &name) {
   return Kind::none;
 }
 
+// An item that opens no card (Item::card).
+inline constexpr uint16_t NO_CARD = 0xFFFF;
 struct Item {
   Kind kind = Kind::none;
   uint32_t icon = 0;   // Material Design Icons codepoint, 0 without an icon
@@ -51,9 +53,12 @@ struct Item {
   bool only_weak = false;
   // Kind::plugin: its icon without the plugin's words (`o`, plugin API 0.8), as a person chose in the editor.
   bool icon_only = false;
+  // An entity's item (`d`, firmware 0.56.0+): the index of the tile whose card a tap on it opens
+  // (runtime_tiles::open_card), NO_CARD for an item that opens nothing.
+  uint16_t card = NO_CARD;
   bool operator==(const Item &o) const {
     return kind == o.kind && icon == o.icon && text == o.text && epoch == o.epoch && color == o.color && has_color == o.has_color &&
-           only_weak == o.only_weak && icon_only == o.icon_only;
+           only_weak == o.only_weak && icon_only == o.icon_only && card == o.card;
   }
 };
 

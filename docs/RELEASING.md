@@ -51,7 +51,10 @@ Apps > App store > ⋮ > Repositories:
 https://github.com/MaxGramser/homeassistant_espscreen#dev
 ```
 
-The store then shows a second Tessera Screen Manager, under that repository. It is another app for Home Assistant, so:
+The store then shows a second app, **Tessera Screen Manager (dev)**, under that repository: on dev the app's name in
+`screen_manager/config.yaml` says dev, so the two can be told apart. A release takes that mark off (`tools/release.py
+prepare`), `publish` refuses a commit that still has it, and after a release from dev `publish` puts it back on dev in a
+commit of its own. It is another app for Home Assistant, so:
 
 - it keeps its own data and starts without tiles. Screens and their YAML in the ESPHome folder are shared, the tiles
   are not;
@@ -59,9 +62,13 @@ The store then shows a second Tessera Screen Manager, under that repository. It 
 - every screen it builds or updates comes from dev: the board package, the components and the fonts. It writes
   `ref: dev` under `packages: display:` and `GITHUB_REF: "dev"` in the screen's substitutions. A `ref:` that names a
   tag, a commit or another branch is left alone;
+- the editor says it is the dev app: a small **dev** chip beside the name Tessera at the top of the sidebar;
 - the version number of dev stays the same from one change to the next, so a new dev is never offered as an update.
-  Each screen has **Reinstall from dev** in its details instead, which builds the newest dev and installs it over
-  Wi-Fi like an update;
+  Each screen has **Reinstall from dev** in its details in the sidebar instead, under its firmware, which builds the
+  newest dev and installs it over Wi-Fi like an update. **Reinstall all from dev** in Settings, Updates does that for
+  every screen, one after the other;
+- automatic updates at night leave a screen on dev's number alone, so nothing is built again every night. A screen
+  gets the nightly update after a release raised the number on dev, or for another language, and it builds from dev;
 - getting the newest app from dev: App store > ⋮ > Check for updates, then the app's ⋮ > Rebuild;
 - dev is tried on a few boards before it is pushed, not on every board, and it can break. Report what goes wrong on
   GitHub, with the board and the app's log.
@@ -98,7 +105,7 @@ does the steps that can go wrong by hand, and refuses when something is missing.
    their own. `tools/release.py status` lists the commits since main, the notes under `## Unreleased` and the firmware
    it is. When main has commits dev lacks (a hotfix, a docs change), merge `origin/main` into dev first.
 2. **Prepare.** `tools/release.py prepare` writes the release's edits into the working tree: the app version (the last
-   number up, or `--version`), the CHANGELOG heading in place of `## Unreleased` with the firmware it ships with, the
+   number up, or `--version`), the app's name without " (dev)", the CHANGELOG heading in place of `## Unreleased` with the firmware it ships with, the
    firmware numbers `tools/affected_boards.py` works out (the shared one in `packages/core.yaml` and
    `FIRMWARE_VERSION`, or a board file's own), and `screen_manager/app/boards.json`. docs/BOARD_RELEASES.md explains the
    numbers. Read the CHANGELOG section once more: it is what Home Assistant shows under the update, with concrete test
@@ -121,8 +128,9 @@ does the steps that can go wrong by hand, and refuses when something is missing.
    the test that the remote YAML is complete.
 6. **Publish.** Write the GitHub release notes in English, in a file, the way the earlier releases read. Then
    `tools/release.py publish --notes <file> --yes`: it checks that HEAD is pushed, green in CI and the commit the
-   candidate was made of, then fast-forwards main to it, tags it `screens-vX.Y.Z`, makes the GitHub release and removes
-   the candidate. Without `--yes` it says what it would do.
+   candidate was made of, then fast-forwards main to it, tags it `screens-vX.Y.Z`, makes the GitHub release, removes
+   the candidate, and on dev names the app "(dev)" again in a commit it pushes to dev. Without `--yes` it says what it
+   would do.
 7. **After.** Point the test screens back at main. Users find the update in the App store and update Tessera Screen
    Manager; for new screen features they use **Update** on the screen in Tessera (or the nightly round), and ESPHome
    Device Builder's Install, Wirelessly, on the existing device works too: the updated app points every screen's YAML

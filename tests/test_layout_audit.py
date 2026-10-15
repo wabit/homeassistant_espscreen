@@ -44,6 +44,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / 'screen_manager/app'))
 import catalogue  # noqa: E402
+import calendar_feed  # noqa: E402
 from core import BUILTIN, Grid, drawn_controls, extras, span_of, span_offered, state_message  # noqa: E402
 
 WASM = ROOT / 'web/src/wasm/firmware_preview.wasm'
@@ -151,12 +152,29 @@ KINDS = {
     'select': {'entity': 'select.audit', 'state': 'Comfort', 'attributes': {'options': ['Eco', 'Comfort', 'Boost']}},
     'sensor': {'entity': 'sensor.audit', 'state': '21.4', 'attributes': {'unit_of_measurement': '°C', 'device_class': 'temperature'},
                'history': HISTORY},
+    # A sensor's meter (firmware 0.56.0): the ring is the sensor case's own face; the tape and the bar with a range and
+    # three segments of their own.
+    'sensor-meter-tape': {'entity': 'sensor.tape', 'state': '840', 'attributes': {'unit_of_measurement': 'ppm', 'device_class': 'carbon_dioxide'},
+                          'options': {'display': 'meter', 'meter': 'tape', 'min': 400, 'max': 1600, 'segments': 3, 'thresholds': [800, 1200]},
+                          'history': HISTORY},
+    'sensor-meter-bar': {'entity': 'sensor.bar', 'state': '86', 'attributes': {'unit_of_measurement': '%'},
+                         'options': {'display': 'meter', 'meter': 'bar', 'segments': 3}, 'history': HISTORY},
     'sensor-text': {'entity': 'sensor.text', 'state': 'A status that Home Assistant reports as a long sentence', 'attributes': {}},
     'sun': {'entity': 'sun.sun', 'state': 'above_horizon', 'attributes': {'next_rising': iso(hours=9), 'next_setting': iso(hours=2)}},
     'switch': {'entity': 'switch.audit', 'state': 'on', 'attributes': {}},
     'timer': {'entity': 'timer.audit', 'state': 'active',
               'attributes': {'finishes_at': iso(minutes=5), 'duration': '0:05:00', 'remaining': '0:05:00'}},
     'vacuum': {'entity': 'vacuum.audit', 'state': 'docked', 'attributes': {'battery_level': 80, 'supported_features': 30524}},
+    # A calendar card (firmware 0.56.0): an event running now, an all-day one, the next ones today and tomorrow, with long
+    # titles and places, as Home Assistant's calendar.get_events answers.
+    'calendar': {'entity': 'calendar.audit', 'state': 'on', 'attributes': {'friendly_name': 'Family'},
+                 'calendar': [
+                     {'start': iso(hours=-1), 'end': iso(hours=1), 'summary': 'Quarterly planning with the whole team', 'location': 'Meeting room 2'},
+                     {'start': NOW.date().isoformat(), 'end': (NOW.date() + timedelta(days=2)).isoformat(), 'summary': 'Sprint week'},
+                     {'start': iso(hours=2), 'end': iso(hours=2, minutes=30), 'summary': 'Parent evening at school'},
+                     {'start': iso(hours=4), 'end': iso(hours=6), 'summary': 'Dinner with friends', 'location': 'Restaurant'},
+                     {'start': iso(hours=22), 'end': iso(hours=23), 'summary': 'Dentist', 'location': 'Main Street 12'},
+                     {'start': iso(hours=26), 'end': iso(hours=27), 'summary': 'Board meeting', 'status': 'tentative'}]},
     'weather': {'entity': 'weather.audit', 'state': 'partlycloudy',
                 'attributes': {'temperature': 18.4, 'temperature_unit': '°C', 'humidity': 92, 'wind_speed': 12.2,
                                'wind_speed_unit': 'km/h', 'apparent_temperature': 17.1, 'supported_features': 3},
@@ -264,6 +282,8 @@ def message(kind, size, name, display=None, controls=None):
         extra = extras(tile, states, energy=case['energy']['prefs'])
     else:
         extra = None if case['entity'] in BUILTIN else extras(tile, states, case.get('forecast'), None, case.get('hourly'), now=NOW)
+    if case.get('calendar'):
+        extra = {**(extra or {}), 'cal': calendar_feed.card(tile, {case['entity']: case['calendar']}, states, {}, timezone.utc, NOW)}
     out = drawn_controls(state_message(0, tile, states, extra), None)
     if case.get('history') and case['entity'].startswith('sensor.'):
         out['history'] = case['history']

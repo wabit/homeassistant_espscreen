@@ -9,12 +9,26 @@
 #include "esphome/core/application.h"
 #include "runtime_tiles.h"
 #include "plugin_host.h"
+#include "plugin_api.h"
 #include <algorithm>
 #include <functional>
 #include <memory>
+#include <string_view>
 #include <vector>
 
+// The documents the host parses a plugin tile's options and data into, and builds a question in: PSRAM first, as the
+// texts they come from (roomy.h).
+namespace {
+struct RoomyJson : ArduinoJson::Allocator {
+  void *allocate(size_t size) override { return roomy::allocate(size); }
+  void deallocate(void *pointer) override { roomy::release(pointer); }
+  void *reallocate(void *pointer, size_t size) override { return roomy::reallocate(pointer, size); }
+};
+RoomyJson json_memory;
+}  // namespace
+
 namespace rt = runtime_tiles;
+namespace plugin_host { extern tessera::Point tapped; }
 // ---- The register (plugin_api.h) ----
 namespace tessera {
 
@@ -225,10 +239,12 @@ bool open_card(const char *plugin_id, const char *card, const std::string &entit
 
 void close_card() { plugin_host::close_card(); }
 
+Point tap_point() { return plugin_host::tapped; }
+
 uint32_t send(const Plugin *plugin, JsonObjectConst request) {
   static uint32_t next = 0;
   if (!plugin || rt::inbox.empty() || !esphome::api::global_api_server) return 0;
-  JsonDocument doc;
+  JsonDocument doc(&json_memory);
   doc.set(request);
   const uint32_t number = ++next;
   doc["re"] = number;
@@ -259,6 +275,7 @@ static bool tone_color(Tone tone, uint32_t &color) {
     case Tone::ACCENT: color = theme::hex(theme::ACCENT); return true;
     case Tone::BUSY: color = theme::foreground(theme::ha::AMBER); return true;
     case Tone::ALERT: color = theme::foreground(theme::ha::RED); return true;
+    case Tone::GOOD: color = theme::foreground(theme::ha::GREEN); return true;
     default: return false;
   }
 }
@@ -282,6 +299,7 @@ const lv_font_t *font(Font f) {
     case Font::BODY: face = rt::small_font; break;              // sublabel: a tile's value, a card's second line
     case Font::ICON: face = rt::tile_icon_font(); break;        // materialdesign_icons
     case Font::ICON_SMALL: face = rt::mini_icon_font; break;    // materialdesign_icons_mini
+    case Font::DIGITS: face = rt::setpoint_font ? rt::setpoint_font : rt::watch_value_font; break;  // setpoint_digits
   }
   // Before boot handed them over (never on a screen: plugins are made after on_boot), the nearest that is there.
   if (!face) face = rt::small_font ? rt::small_font : rt::control_font ? rt::control_font : rt::detail_font;
@@ -293,19 +311,36 @@ int text_width(const std::string &text, Font f) {
   return face ? rt::text_width(text, face) : 0;
 }
 
+bool covers(const std::string &text, Font f) {
+  const lv_font_t *face = font(f);
+  return face && rt::face_covers(face, text);
+}
+
 lv_obj_t *label(lv_obj_t *parent, Font f, theme::Role role) {
   lv_obj_t *l = lv_label_create(parent);
   lv_obj_remove_flag(l, LV_OBJ_FLAG_CLICKABLE);
   lv_label_set_long_mode(l, LV_LABEL_LONG_DOT);
   lv_label_set_text(l, "");
-  if (const lv_font_t *face = font(f)) lv_obj_set_style_text_font(l, face, 0);
+  if (const lv_font_t *face = font(f)) {
+    lv_obj_set_style_text_font(l, face, 0);
+    // One line high, as the label promises: with LVGL's own height a text too long for its width wraps onto a second
+    // line (outside a tile) instead of ending in dots.
+    lv_obj_set_height(l, lv_font_get_line_height(face));
+  }
   lv_obj_set_style_text_color(l, theme::color(role), 0);
   return l;
 }
 
 void set_text(lv_obj_t *l, const std::string &text) { if (l) rt::label(l, text); }
 void set_font(lv_obj_t *l, Font f) {
-  if (const lv_font_t *face = font(f)) if (l) rt::set_font(l, face);
+  const lv_font_t *face = font(f);
+  if (!face || !l) return;
+  // A label one line of its old font high stays one line high in the new one; a height of the plugin's own stays.
+  const lv_font_t *was = lv_obj_get_style_text_font(l, LV_PART_MAIN);
+  const bool one_line = was && lv_obj_get_style_height(l, LV_PART_MAIN) == lv_font_get_line_height(was);
+  rt::set_font(l, face);
+  if (one_line && lv_obj_get_style_height(l, LV_PART_MAIN) != lv_font_get_line_height(face))
+    lv_obj_set_height(l, lv_font_get_line_height(face));
 }
 void set_color(lv_obj_t *l, theme::Role role) {
   if (l) rt::set_color(l, LV_STYLE_TEXT_COLOR, theme::color(role));
@@ -314,8 +349,17 @@ void set_color(lv_obj_t *l, theme::Role role) {
 void set_tone(lv_obj_t *l, Tone tone, theme::Role normal) {
   if (!l) return;
   uint32_t color = 0;
-  if (!tone_color(tone, color)) return set_color(l, normal);
+  if (!::tessera::tone_color(tone, color)) return set_color(l, normal);
   rt::set_color(l, LV_STYLE_TEXT_COLOR, lv_color_hex(color));
+}
+
+lv_color_t tone_color(Tone tone, theme::Role normal) {
+  uint32_t color = 0;
+  return ::tessera::tone_color(tone, color) ? lv_color_hex(color) : theme::color(normal);
+}
+
+void set_fill(lv_obj_t *block, Tone tone, theme::Role normal) {
+  if (block) rt::set_color(block, LV_STYLE_BG_COLOR, tone_color(tone, normal));
 }
 
 lv_obj_t *block(lv_obj_t *parent, theme::Role fill) {
@@ -337,7 +381,16 @@ std::string icon(uint32_t codepoint) { return tile_icon::utf8(codepoint); }
 // ---- Plugin tiles in cards (plugin_host.h) ----
 namespace plugin_host {
 
-struct Card {
+// A place for a picture on a plugin tile's card (plugin API 0.10, ui::picture): the block the plugin laid out, the
+// image object that draws its piece of the card's atlas once that is here, and what it shows.
+struct Place {
+  lv_obj_t *place = nullptr, *image = nullptr;
+  std::string url;
+  bool contain = false;
+  uint8_t turn = 0;      // tessera::Turn
+  bool mirror = false;
+};
+struct Card : tessera::InPsram {   // PSRAM first, as the plugin's own objects (roomy.h)
   std::unique_ptr<tessera::Tile> tile;
   std::string entity;          // what the card was made for: the tile type,
   size_t index = SIZE_MAX;     // the tile of the layout,
@@ -345,9 +398,20 @@ struct Card {
   size_t options = 0;          // and its options (a hash)
   size_t state = 0;            // the data it was last given (a hash), 0 for none yet
   bool dark = false;           // the look it last coloured itself for
+  std::vector<Place> places;   // its places for pictures, in the order the tile made them
 };
 
-static size_t hash(const std::string &text) { return std::hash<std::string>{}(text) | 1; }
+// A text's hash, never 0 (0 is "nothing yet"), for a string of any allocator (roomy.h).
+template <class S> static size_t hash(const S &text) { return std::hash<std::string_view>{}(std::string_view(text.data(), text.size())) | 1; }
+
+// The card whose tile is in a call of the host (create, on_state, on_tick, on_theme, on_tap): a place the tile makes
+// in that call is this card's. Nothing else of a tile's runs (a plugin's own moments are the plugin's, not a tile's).
+static Card *making = nullptr;
+struct Making {
+  Card *was;
+  explicit Making(Card *card) : was(making) { making = card; }
+  ~Making() { making = was; }
+};
 
 bool known(const rt::Tile &t) { return tessera::tile_type(t.entity) != nullptr; }
 
@@ -362,7 +426,7 @@ void render(rt::Widgets &w, const rt::Tile &t, int width, int height) {
   if (!type || !type->make) return;
   rt::begin_extra(w, "plugin", width, height);
   const auto &extra = t.extra();
-  const size_t options = hash(extra.plugin_options + "|" + extra.plugin_entity);
+  const size_t options = (hash(extra.plugin_options) * 31u ^ hash(extra.plugin_entity)) | 1;
   Card *card = w.plugin;
   if (card && (card->entity != t.entity || card->index != w.index || card->width != width || card->height != height ||
                card->options != options)) {
@@ -382,29 +446,49 @@ void render(rt::Widgets &w, const rt::Tile &t, int width, int height) {
     card->height = height;
     card->options = options;
     card->dark = theme::dark;
-    JsonDocument doc;
-    if (extra.plugin_options.empty() || deserializeJson(doc, extra.plugin_options)) doc.to<JsonObject>();
+    JsonDocument doc(&json_memory);
+    if (extra.plugin_options.empty() || deserializeJson(doc, extra.plugin_options.data(), extra.plugin_options.size()))
+      doc.to<JsonObject>();
     tessera::TileContext context{w.extra, width, height, static_cast<uint8_t>(t.column_span()),
                                  static_cast<uint8_t>(t.row_span()), t.name.c_str(), extra.plugin_entity.c_str(),
                                  static_cast<int>(w.index), doc.as<JsonObjectConst>()};
+    Making call(card);
     card->tile->create(context);
   }
+  Making call(card);
   const size_t state = hash(extra.plugin_state);
   if (card->state != state) {
     card->state = state;
-    JsonDocument doc;
-    if (extra.plugin_state.empty() || deserializeJson(doc, extra.plugin_state)) doc.to<JsonObject>();
+    JsonDocument doc(&json_memory);
+    if (extra.plugin_state.empty() || deserializeJson(doc, extra.plugin_state.data(), extra.plugin_state.size()))
+      doc.to<JsonObject>();
     card->tile->on_state(doc.as<JsonObjectConst>());
     card->tile->on_tick(rt::now_epoch());
   }
   if (card->dark != theme::dark) {
     card->dark = theme::dark;
     card->tile->on_theme();
+    // The blocks under the pictures follow the look as every block does; the pictures themselves are asked again in
+    // it (the look is in their key), with the card's ground of that look behind their corners.
+    for (auto &p : card->places) rt::set_color(p.place, LV_STYLE_BG_COLOR, theme::color(theme::TRACK));
   }
+  // Its pictures, from the store when it has them (a page that comes back, a card made anew for the same tile).
+  if (!card->places.empty()) rt::tile_picture_place(w, t, 0, 0, 0);
 }
 
-void tap(rt::Widgets &w) {
-  if (w.plugin && w.plugin->tile) w.plugin->tile->on_tap();
+// Where the finger of the tap under way was, in the tile's own pixels (tessera::tap_point).
+tessera::Point tapped;
+
+void tap(rt::Widgets &w, int x, int y) {
+  if (!w.plugin || !w.plugin->tile) return;
+  tapped = {-1, -1};
+  if (x >= 0 && y >= 0 && w.extra) {
+    lv_area_t area;
+    lv_obj_get_coords(w.extra, &area);
+    tapped = {x - area.x1, y - area.y1};
+  }
+  Making call(w.plugin);
+  w.plugin->tile->on_tap();
 }
 
 static void tick_card(uint32_t epoch);
@@ -414,8 +498,168 @@ void tick_cards(uint32_t epoch) {
   for (auto &w : rt::widgets) {
     if (!w.plugin || !w.tile || !w.extra || w.extra_mode != "plugin" || w.index >= rt::model.count) continue;
     if (lv_obj_has_flag(w.tile, LV_OBJ_FLAG_HIDDEN) || lv_obj_has_flag(w.extra, LV_OBJ_FLAG_HIDDEN)) continue;
+    Making call(w.plugin);
     w.plugin->tile->on_tick(epoch);
   }
+}
+
+// ---- A plugin tile's pictures (plugin API 0.10, tile_picture.h "parts") ----
+// The places with an address that lie within the card, as the parts of one picture, in the order the tile made them,
+// and the place each part is; the atlas's scale for them (a card over the cap comes smaller as a whole). The card's
+// layout is brought up to date first, so a place moved in on_tick is measured where it is now.
+static int measure(const rt::Widgets &w, std::vector<tile_picture::Part> &parts, std::vector<Place *> &owners) {
+  parts.clear();
+  owners.clear();
+  if (!w.plugin || !w.tile) return picture_store::SCALE_ONE;
+  lv_obj_update_layout(w.tile);
+  lv_area_t card;
+  lv_obj_get_coords(w.tile, &card);
+  const int cw = lv_area_get_width(&card), ch = lv_area_get_height(&card);
+  int right = 0, bottom = 0;
+  for (auto &p : w.plugin->places) {
+    if (p.url.empty() || !p.place || lv_obj_has_flag(p.place, LV_OBJ_FLAG_HIDDEN)) continue;
+    lv_area_t at;
+    lv_obj_get_coords(p.place, &at);
+    tile_picture::Part part;
+    // Where the tile laid the place out: a slide (ui::slide_pictures) moves it only until its next picture is here.
+    part.x = at.x1 - card.x1 - lv_obj_get_style_translate_x(p.place, LV_PART_MAIN);
+    part.y = at.y1 - card.y1;
+    part.w = lv_area_get_width(&at);
+    part.h = lv_area_get_height(&at);
+    // A place outside the card, or over its edge, is not asked for: the app refuses a frame beyond the glass, and
+    // the card would cut it anyway.
+    if (part.w <= 0 || part.h <= 0 || part.x < 0 || part.y < 0 || part.x + part.w > cw || part.y + part.h > ch) continue;
+    part.radius = lv_obj_get_style_radius(p.place, LV_PART_MAIN);
+    part.url = p.url;
+    part.contain = p.contain;
+    part.turn = p.turn;
+    part.mirror = p.mirror;
+    parts.push_back(std::move(part));
+    owners.push_back(&p);
+    right = std::max(right, part.x + part.w);
+    bottom = std::max(bottom, part.y + part.h);
+    if (parts.size() == tile_picture::MAX_PARTS) break;
+  }
+  return picture_store::fit_scale(right, bottom, rt::picture_cap());
+}
+
+bool pictured(const rt::Widgets &w) {
+  if (!w.plugin) return false;
+  for (const auto &p : w.plugin->places) if (!p.url.empty() && p.place) return true;
+  return false;
+}
+
+bool picture_ask(const rt::Widgets &w, const rt::Tile &t, tile_picture::Ask &a) {
+  std::vector<tile_picture::Part> parts;
+  std::vector<Place *> owners;
+  measure(w, parts, owners);
+  if (parts.empty()) return false;
+  // Behind the pictures' corners the card's own colour, as behind a tile's picture over its whole card.
+  const uint32_t ground = t.transparent ? theme::hex(theme::PAGE) : theme::surface(t.background);
+  tile_picture::set_parts(a, std::move(parts), ground, rt::picture_cap());
+  a.index = w.index;
+  a.entity = t.entity;
+  a.dark = theme::dark;
+  return true;
+}
+
+// A place without its picture: its block again, drawing nothing of the store.
+static void place_clear(Place &p) {
+#if LV_USE_IMAGE
+  if (p.image) {
+    lv_image_set_src(p.image, nullptr);
+    lv_obj_add_flag(p.image, LV_OBJ_FLAG_HIDDEN);
+  }
+#endif
+  if (p.place) rt::set_number(p.place, LV_STYLE_BG_OPA, LV_OPA_COVER);
+}
+
+// The places back where the tile laid them out, the moment another picture (or none) takes the place of what they
+// showed during a slide.
+static void slide_back(Card &card) {
+  for (auto &p : card.places) {
+    if (!p.place) continue;
+    lv_anim_delete(p.place, nullptr);
+    if (lv_obj_get_style_translate_x(p.place, LV_PART_MAIN)) lv_obj_set_style_translate_x(p.place, 0, 0);
+  }
+}
+
+void picture_place(rt::Widgets &w, void *picture) {
+  if (!w.plugin) return;
+  if (picture != picture_drawn(w)) slide_back(*w.plugin);
+#if LV_USE_IMAGE
+  auto *src = static_cast<lv_image_dsc_t *>(picture);
+  std::vector<tile_picture::Part> parts;
+  std::vector<Place *> owners;
+  const int scale = measure(w, parts, owners);
+  for (auto &p : w.plugin->places) {
+    const auto at = std::find(owners.begin(), owners.end(), &p);
+    if (!src || !src->data || at == owners.end()) { place_clear(p); continue; }
+    const tile_picture::Piece f = tile_picture::piece(parts[at - owners.begin()], scale);
+    if (f.x + f.w > static_cast<int>(src->header.w) || f.y + f.h > static_cast<int>(src->header.h)) { place_clear(p); continue; }
+    if (!p.image) {
+      p.image = lv_image_create(p.place);
+      lv_obj_remove_flag(p.image, LV_OBJ_FLAG_CLICKABLE);
+      // The offset counts from the atlas's top left, as the library's covers do: LVGL's default aligns a picture larger
+      // than its object in the middle, and the piece would lie outside the place.
+      lv_image_set_inner_align(p.image, LV_IMAGE_ALIGN_TOP_LEFT);
+    }
+    // Its piece of the atlas, in the middle of its place: a piece over the cap is smaller than the place.
+    lv_image_set_src(p.image, src);
+    lv_image_set_offset_x(p.image, -f.x);
+    lv_image_set_offset_y(p.image, -f.y);
+    lv_obj_set_pos(p.image, (lv_obj_get_width(p.place) - f.w) / 2, (lv_obj_get_height(p.place) - f.h) / 2);
+    lv_obj_set_size(p.image, f.w, f.h);
+    lv_obj_remove_flag(p.image, LV_OBJ_FLAG_HIDDEN);
+    // The block goes under its picture: the piece carries the card's colour behind its corners already.
+    rt::set_number(p.place, LV_STYLE_BG_OPA, LV_OPA_TRANSP);
+    lv_obj_invalidate(p.image);
+  }
+#else
+  for (auto &p : w.plugin->places) place_clear(p);
+  (void) picture;
+#endif
+}
+
+const void *picture_drawn(const rt::Widgets &w) {
+  if (!w.plugin) return nullptr;
+#if LV_USE_IMAGE
+  for (const auto &p : w.plugin->places)
+    if (p.image && !lv_obj_has_flag(p.image, LV_OBJ_FLAG_HIDDEN))
+      if (const void *src = lv_image_get_src(p.image)) return src;
+#endif
+  return nullptr;
+}
+
+bool picture_draws(const rt::Widgets &w, const void *picture) {
+  if (!w.plugin || !picture) return false;
+  for (const auto &p : w.plugin->places)
+    if (p.image && rt::draws(p.image, static_cast<const lv_image_dsc_t *>(picture))) return true;
+  return false;
+}
+
+bool picture_let_go(rt::Widgets &w, const void *picture) {
+  if (!w.plugin) return false;
+  bool took = false;
+  for (auto &p : w.plugin->places) {
+    if (!p.image || (picture && !rt::draws(p.image, static_cast<const lv_image_dsc_t *>(picture)))) continue;
+    place_clear(p);
+    took = true;
+  }
+  return took;
+}
+
+// The place `obj` is, on the card in a call of the host first, else on any card (a plugin that kept the place and
+// sets its picture from on_message); nullptr for an object that is no place.
+static Place *find_place(lv_obj_t *obj) {
+  if (!obj) return nullptr;
+  if (making) for (auto &p : making->places) if (p.place == obj) return &p;
+  Place *found = nullptr;
+  rt::each_card([&](rt::Widgets &w) {
+    if (found || !w.plugin) return;
+    for (auto &p : w.plugin->places) if (p.place == obj) { found = &p; return; }
+  });
+  return found;
 }
 
 uint16_t bytes(const std::string &entity) {
@@ -466,25 +710,25 @@ template<typename Run> static bool call(OpenCard *open, Run &&run) {
 }
 
 // What the tile a card was opened from says now: a plugin tile's data, or an entity's state and name.
-static std::string card_data(int tile) {
-  if (tile < 0 || static_cast<size_t>(tile) >= rt::model.count) return "";
+static roomy::Text card_data(int tile) {
+  if (tile < 0 || static_cast<size_t>(tile) >= rt::model.count) return {};
   const auto &t = rt::model.tiles[tile];
   if (t.is_plugin()) return t.extra().plugin_state;
-  JsonDocument doc;
+  JsonDocument doc(&json_memory);
   doc["state"] = t.state;
   doc["name"] = t.name;
-  std::string out;
+  roomy::Text out;
   serializeJson(doc, out);
   return out;
 }
 
 static void card_state(OpenCard &open, bool force) {
-  const std::string data = card_data(open.tile);
+  const roomy::Text data = card_data(open.tile);
   const size_t state = hash(data);
   if (!force && state == open.state) return;
   open.state = state;
-  JsonDocument doc;
-  if (data.empty() || deserializeJson(doc, data)) doc.to<JsonObject>();
+  JsonDocument doc(&json_memory);
+  if (data.empty() || deserializeJson(doc, data.data(), data.size())) doc.to<JsonObject>();
   open.card->on_state(doc.as<JsonObjectConst>());
 }
 
@@ -789,6 +1033,66 @@ void hello(JsonObject root) {
 }
 
 }  // namespace plugin_host
+
+namespace tessera::ui {
+lv_obj_t *text(lv_obj_t *parent, Font f, theme::Role role) {
+  // A label's dots (LV_LABEL_LONG_DOT) wrap at the width and end the last line that fits the height with dots: two
+  // lines to start with, the plugin's height after that.
+  lv_obj_t *l = label(parent, f, role);
+  if (const lv_font_t *face = font(f)) lv_obj_set_height(l, 2 * lv_font_get_line_height(face));
+  return l;
+}
+
+bool pictures() { return rt::tile_pictures_supported(); }
+
+lv_obj_t *picture(lv_obj_t *parent) {
+  lv_obj_t *place = block(parent, theme::TRACK);
+  lv_obj_remove_flag(place, LV_OBJ_FLAG_SCROLLABLE);
+  if (plugin_host::making) plugin_host::making->places.push_back({place});
+  else ESP_LOGW("plugins", "ui::picture outside a tile's call: the place shows no picture");
+  return place;
+}
+
+void set_picture(lv_obj_t *place, const std::string &url, Fit fit) { set_picture(place, url, fit, Turn::NONE, false); }
+
+static void slide_exec(void *obj, int32_t x) { lv_obj_set_style_translate_x(static_cast<lv_obj_t *>(obj), x, 0); }
+
+void slide_pictures(int dx, uint32_t ms) {
+  plugin_host::Card *card = plugin_host::making;
+  if (!card) {
+    ESP_LOGW("plugins", "ui::slide_pictures outside a tile's call");
+    return;
+  }
+  for (auto &p : card->places) {
+    if (!p.place || lv_obj_has_flag(p.place, LV_OBJ_FLAG_HIDDEN)) continue;
+    lv_anim_delete(p.place, nullptr);
+    lv_anim_t a;
+    lv_anim_init(&a);
+    lv_anim_set_var(&a, p.place);
+    lv_anim_set_values(&a, lv_obj_get_style_translate_x(p.place, LV_PART_MAIN), dx);
+    lv_anim_set_duration(&a, ms);
+    lv_anim_set_exec_cb(&a, slide_exec);
+    lv_anim_set_path_cb(&a, lv_anim_path_ease_out);
+    lv_anim_start(&a);
+  }
+}
+
+void set_picture(lv_obj_t *place, const std::string &url, Fit fit, Turn turn, bool mirror) {
+  plugin_host::Place *p = plugin_host::find_place(place);
+  if (!p) return;
+  const bool contain = fit == Fit::CONTAIN;
+  const uint8_t turned = static_cast<uint8_t>(turn);
+  if (p->url == url && p->contain == contain && p->turn == turned && p->mirror == mirror) return;
+  p->url = url;
+  p->contain = contain;
+  p->turn = turned;
+  p->mirror = mirror;
+  // Another picture: the next round asks for it (the address is in the picture's key), and the place keeps what it
+  // showed until it is here (tile_picture_place), so a row of posters turns without a flash of blocks; "" takes the
+  // picture away at once, and a place that showed none keeps its block.
+  if (url.empty()) plugin_host::place_clear(*p);
+}
+}  // namespace tessera::ui
 #else
 #include <cstdio>
 #include "plugin_host.h"
@@ -800,9 +1104,15 @@ namespace plugin_host {
 bool known(const runtime_tiles::Tile &) { return false; }
 void render(runtime_tiles::Widgets &, const runtime_tiles::Tile &, int, int) {}
 void release(runtime_tiles::Widgets &) {}   // no plugin card is ever made in this build
-void tap(runtime_tiles::Widgets &) {}
+void tap(runtime_tiles::Widgets &, int, int) {}
 void tick_cards(uint32_t) {}
 uint16_t bytes(const std::string &) { return PLACEHOLDER_BYTES; }
+bool pictured(const runtime_tiles::Widgets &) { return false; }
+bool picture_ask(const runtime_tiles::Widgets &, const runtime_tiles::Tile &, tile_picture::Ask &) { return false; }
+void picture_place(runtime_tiles::Widgets &, void *) {}
+const void *picture_drawn(const runtime_tiles::Widgets &) { return nullptr; }
+bool picture_draws(const runtime_tiles::Widgets &, const void *) { return false; }
+bool picture_let_go(runtime_tiles::Widgets &, const void *) { return false; }
 bool open_card(const std::string &, const std::string &, int, const std::string &) { return false; }
 void close_card() {}
 bool card_open() { return false; }

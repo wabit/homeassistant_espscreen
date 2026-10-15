@@ -2,6 +2,7 @@
 #include "tile_catalogue.h"
 #include <algorithm>
 #include <array>
+#include <cmath>
 #include <memory>
 #include <string>
 #include <utility>
@@ -11,6 +12,8 @@
 #include "page_protocol.h"
 #include "optimistic.h"
 #include "energy_card.h"
+#include "calendar_card.h"
+#include "roomy.h"
 #include <cmath>
 #include <cstdint>
 #include <cstdlib>
@@ -308,6 +311,8 @@ struct Extra {
   std::string map_mark;
   // The energy card's moment (firmware 0.47.0+): its own block, so no other tile's extras grow by it.
   std::shared_ptr<const energy_card::Data> energy;
+  // A calendar card's events (firmware 0.56.0+, calendar_card.h): its own block too, shared with the card that paints it.
+  std::shared_ptr<const calendar_card::Data> calendar;
   uint32_t media_duration = 0, media_position = 0, media_position_at = 0;
   // More of a media player (firmware 0.24.0+, app 0.4.42+): the speaker it plays on and the ones it may (source_list,
   // sixteen at most), shuffle (-1 for a player without it) and repeat ("" without it), the features it reported at its
@@ -365,7 +370,9 @@ struct Extra {
   bool assumed = false;
   // A plugin tile (docs/PLUGINS.md): its options as the editor set them, and what the add-on sent for it (its `x`), each
   // as the JSON it came in. The plugin reads them when its card is made and when they change (plugin_host::render).
-  std::string plugin_options, plugin_state;
+  // PSRAM first (roomy.h): every plugin tile of the layout keeps them, up to 2.6 KB of data each, and inside the chip
+  // they took the room Wi-Fi needs (2026-10-13).
+  roomy::Text plugin_options, plugin_state;
   // The Home Assistant entity a plugin tile belongs to (its manifest's `entity`), "" for none.
   std::string plugin_entity;
   Choice *choice(char kind) { for (auto &c : choices) if (c.kind == kind) return &c; return nullptr; }
@@ -383,7 +390,7 @@ struct Extra {
            media_source.empty() && media_repeat.empty() && media_sources.empty() && media_shuffle < 0 && !media_features &&
            speaker_flags.empty() && speaker_volumes.empty() && media_inputs.empty() && media_input.empty() && media_target.empty() &&
            !has_ground && !ground_known && !media_library && fav_kind.empty() && fav_source.empty() && fav_mark.empty() &&
-           fav_glyph.empty() && !fav_playing && !energy && plugin_options.empty() && plugin_state.empty() && plugin_entity.empty();
+           fav_glyph.empty() && !fav_playing && !energy && !calendar && plugin_options.empty() && plugin_state.empty() && plugin_entity.empty();
   }
 };
 // The numbers of a clock text ("0:05:00", "07:45"), at most `max` of them, each after optional white space, up to the
@@ -483,6 +490,23 @@ struct Tile {
   bool overlay = true;
   // The energy card drawn calm: lines that grow with the power and an arrow on each, no running dots ("flow": "lines").
   bool energy_lines = false;
+  // A calendar card's choices (firmware 0.56.0+): "Free or busy" words in its head, minutes that count as starting
+  // soon, and the view its full screen opens on.
+  bool calendar_busy_free = false;
+  uint8_t calendar_soon = 0;
+  std::string calendar_view;
+  bool calendar_room = false, calendar_monday = false, calendar_week_numbers = false;
+  uint8_t calendar_hours_from = 0, calendar_hours_to = 0;
+  // A sensor's meter (firmware 0.56.0, meter_card.h): its look, its own range and its colours; none on any other tile, so
+  // a tile pays one pointer for it.
+  struct Meter {
+    uint8_t style = 0, segments = 1;            // meter_card::Style; one, two or three colours
+    float low = NAN, high = NAN;                // the tile's own range; NAN: Home Assistant's
+    std::array<uint32_t, 3> colors{};           // 0xRRGGBB, 0 for none (the tile's own, or the segment's default)
+    std::array<float, 2> thresholds{NAN, NAN};  // in the sensor's unit; NAN: 80 % and 90 % of the range
+  };
+  std::shared_ptr<const Meter> meter;
+  bool is_meter() const { return display == "meter" && domain() == "sensor"; }
   bool live() const { const auto d = domain(); return display == "live" && (d == "camera" || d == "image"); }
   // A media player's album cover in the icon's place (firmware 0.2.78+): "display": "cover" on a single or double-width
   // tile, while the player has a picture; the tile over the whole page keeps the card's big cover.
@@ -504,10 +528,14 @@ struct Tile {
   // The columns of a span ("3x2", firmware 0.19.0); 0 for the five names, whose width `wide` and `full` say.
   uint8_t span = 0;
   // A key of a bedside clock (firmware 0.8.0+): a tile without a place of its own. `parent` is its clock's index, -1
-  // for a tile that has a place; `key` is where it stands under the time, counted from 0.
+  // for a tile that has a place; `key` is where it stands under the time, counted from 0. BAR_TILE (firmware 0.56.0+):
+  // a tile of the top bar, an entity in a page's top bar that is on no tile. It has no cell and is drawn nowhere; it is
+  // there for its card, which a tap on its item opens.
+  static constexpr int16_t BAR_TILE = -2;
   int16_t parent = -1;
   uint8_t key = 0;
   bool is_key() const { return parent >= 0; }
+  bool bar_tile() const { return parent == BAR_TILE; }
   // Direct control set on a wide card (firmware 0.2.19+); empty keeps the plain card.
   std::string controls, device_class;
   bool muted = false;
@@ -771,7 +799,8 @@ struct Model {
     const unsigned x = slot % grid.columns, y = slot % grid.slots() / grid.columns;
     if (!rows || index >= count || slot >= pages * grid.slots() || (full && slot % grid.slots()) ||
         x + columns > grid.columns || y + rows > grid.rows) return false;
-    for (size_t i = 0; i < count; ++i) if (i != index && tiles[i].received && !tiles[i].is_key() && slots[i] / grid.slots() == slot / grid.slots()) {
+    for (size_t i = 0; i < count; ++i) if (i != index && tiles[i].received && !tiles[i].is_key() && !tiles[i].bar_tile() &&
+                                           slots[i] / grid.slots() == slot / grid.slots()) {
       const unsigned other_x = slots[i] % grid.columns, other_y = slots[i] % grid.slots() / grid.columns;
       if (x < other_x + tiles[i].column_span() && other_x < x + columns &&
           y < other_y + tiles[i].row_span() && other_y < y + rows) return false;
@@ -790,8 +819,9 @@ struct Model {
 inline unsigned place(const Model &m, std::array<Placement, TILES_MAX> &out) {
   unsigned last = 0;
   for (size_t i = 0; i < m.count && i < grid.max_tiles(); ++i) {
-    // A key has no cell: it is on its clock's page (below), where runtime_tiles::place_page gives it a card.
-    if (m.tiles[i].is_key()) { out[i] = {0xFF, 0xFF}; continue; }
+    // A key has no cell: it is on its clock's page (below), where runtime_tiles::place_page gives it a card. A tile of
+    // the top bar has none either, and is on no page.
+    if (m.tiles[i].is_key() || m.tiles[i].bar_tile()) { out[i] = {0xFF, 0xFF}; continue; }
     unsigned slot = m.slots[i];
     if (m.tiles[i].full) slot -= slot % grid.slots();
     else if (m.tiles[i].wide && !m.tiles[i].span && !grid.wide_fits(slot)) --slot;

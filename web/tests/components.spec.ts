@@ -832,6 +832,7 @@ describe("Sidebar", () => {
     await item.find(".nav-item").trigger("click");
     if (!item.classes().includes("open")) await item.find(".details-toggle").trigger("click");
     expect(item.find(".reinstall-dev").exists()).toBe(false);
+    expect(sidebar.find("#dev-chip").exists()).toBe(false);
     // An app with no channel (a local copy) has no such button either.
     useInventoryStore().inventory.updates = { target: "0.51.0", auto: false, channel: null };
     await nextTick();
@@ -839,10 +840,19 @@ describe("Sidebar", () => {
     useInventoryStore().inventory.updates = { target: "0.51.0", auto: false, channel: "dev" };
     await nextTick();
     expect(item.find(".reinstall-dev").text()).toContain("Reinstall from dev");
-    // Not while another update runs.
+    // It stands in the details where an update would, with what it does; and the dev app says so beside its name.
+    expect(item.find(".screen-dev small").text()).toBe(t("editor.sidebar.update.reinstall_short"));
+    expect(sidebar.find("#dev-chip").text()).toBe("dev");
+    // Another screen's update that runs is no reason: this one waits its turn after it.
     useInventoryStore().inventory.updates = { target: "0.51.0", auto: false, channel: "dev", busy: "other" };
     await nextTick();
+    expect(item.find(".reinstall-dev").exists()).toBe(true);
+    // Not while a build of this screen is on its way already.
+    const id = useInventoryStore().inventory.screens[0].id;
+    useInventoryStore().inventory.builds = { [id]: { id: 2, by: "update", state: "queued", place: 1, file: "living.yaml" } };
+    await nextTick();
     expect(item.find(".reinstall-dev").exists()).toBe(false);
+    useInventoryStore().inventory.builds = {};
     useInventoryStore().inventory.updates = { target: "0.51.0", auto: false, channel: "dev" };
     await nextTick();
     await item.find(".reinstall-dev").trigger("click");
@@ -1032,6 +1042,37 @@ describe("AppSettingsView", () => {
   });
 });
 
+describe("Reinstall all from dev (the dev app's Updates card)", () => {
+  it("offers every screen again on the dev app only, asks first, and asks the add-on for the round", async () => {
+    const calls: [string, RequestInit][] = [];
+    vi.stubGlobal("fetch", vi.fn((path: string, options: RequestInit = {}) => {
+      calls.push([String(path), options]);
+      const body = String(path).includes("inventory") ? JSON.parse(JSON.stringify(useInventoryStore().inventory)) : { started: ["a", "b"] };
+      return Promise.resolve(new Response(JSON.stringify(body), { status: 200 }));
+    }));
+    useInventoryStore().inventory.updates = { target: "0.56.0", pending: 0, channel: "main" };
+    expect(mount(AppSettingsView).find("#reinstall-all").exists()).toBe(false);
+    useInventoryStore().inventory.updates = { target: "0.56.0", pending: 0, channel: "dev", reinstallable: 2 };
+    const view = mount(AppSettingsView);
+    expect(view.find("#reinstall-all").text()).toContain(t("editor.settings.updates.reinstall_all", 2));
+    let yes = false;
+    const asked = answerDialogs(() => yes);
+    await view.find("#reinstall-all").trigger("click");
+    await flushPromises();
+    expect(asked[0]).toMatchObject({ kind: "confirm", message: t("editor.settings.updates.reinstall_all_confirm", 2) });
+    expect(calls.some(([path]) => path.endsWith("updates/run"))).toBe(false);
+    yes = true;
+    await view.find("#reinstall-all").trigger("click");
+    await flushPromises();
+    const sent = calls.find(([path]) => path.endsWith("updates/run"))!;
+    expect(JSON.parse(String(sent[1].body))).toEqual({ reinstall: true });
+    // Nothing to build again: no button.
+    useInventoryStore().inventory.updates = { target: "0.56.0", pending: 0, channel: "dev", reinstallable: 0 };
+    await nextTick();
+    expect(view.find("#reinstall-all").exists()).toBe(false);
+  });
+});
+
 describe("the title above a page (app 0.2.105, in the page's settings since 0.3.19)", () => {
   // A title belongs to its page: you set it in that page's settings, and the top bar's panel only says where.
   const settings = (page: number) => mount(PageInspector, { props: { id: doc.document!.pages[page].id } });
@@ -1115,9 +1156,12 @@ describe("New screen and the Wi-Fi", () => {
     vi.stubGlobal("fetch", vi.fn((url: string, options: any = {}) => {
       const method = options.method || "GET";
       calls.push({ url: String(url), method, body: options.body ? JSON.parse(options.body) : undefined });
-      if (String(url).endsWith("api/firmware")) return Promise.resolve({ ok: true, json: () => Promise.resolve({ available: true, ports: ["/dev/ttyUSB0"], profiles: [], logs: [], wifi: { state: "ready", missing: [] }, boards: BOARD_CHOICES, taken: { nodes: [], prefixes: [] }, job: calls.some((c) => c.url.endsWith("firmware/profiles")) ? job : null }) });
-      if (String(url).includes("inventory")) return Promise.resolve({ ok: true, json: () => Promise.resolve({ ...useInventoryStore().inventory, ...inventory }) });
-      const answer = String(url).endsWith("firmware/profiles") ? { file: "hall.yaml", api_key: "k", job } : String(url).endsWith("firmware/jobs") ? job : { state: "ready" };
+      const asked = calls.some((c) => c.url.endsWith("firmware/profiles"));
+      if (String(url).endsWith("api/firmware")) return Promise.resolve({ ok: true, json: () => Promise.resolve({ available: true, ports: ["/dev/ttyUSB0"], profiles: [], logs: [], wifi: { state: "ready", missing: [] }, boards: BOARD_CHOICES, taken: { nodes: [], prefixes: [] }, job: asked ? job : null }) });
+      if (/firmware\/builds\/\d+\/log$/.test(String(url))) return Promise.resolve({ ok: true, json: () => Promise.resolve({ build: job, logs: [] }) });
+      // The live inventory carries the build line (the add-on's build_queue).
+      if (String(url).includes("inventory")) return Promise.resolve({ ok: true, json: () => Promise.resolve({ ...useInventoryStore().inventory, ...inventory, line: asked ? [job] : [] }) });
+      const answer = String(url).endsWith("firmware/profiles") ? { file: "hall.yaml", api_key: "k", build: job } : String(url).endsWith("firmware/jobs") ? job : { state: "ready" };
       return Promise.resolve({ ok: true, text: () => Promise.resolve(JSON.stringify(answer)), json: () => Promise.resolve(answer) });
     }));
     return { calls, inventory };
@@ -1128,7 +1172,7 @@ describe("New screen and the Wi-Fi", () => {
     await view.find("#friendly_name").setValue("Hall");
   }
   it("writes another network before it makes the profile", async () => {
-    const { calls } = addon({ file: "hall.yaml", action: "install", state: "success", stage: "upload" });
+    const { calls } = addon({ id: 2, by: "install", file: "hall.yaml", action: "install", state: "success", asked: 1, started: 2, finished: 3 });
     const view = mount(InstallerView);
     await flush();
     await toDone(view);
@@ -1142,10 +1186,21 @@ describe("New screen and the Wi-Fi", () => {
     expect(writes[0].body).toEqual({ wifi_ssid: "Home", wifi_password: "secret" });
     expect(writes[1].body.wifi_password).toBeUndefined();
   });
+  it("says why when its build was refused at its turn, such as a cable pulled while it waited", async () => {
+    addon({ id: 2, by: "install", file: "hall.yaml", action: "install", state: "failed", asked: 1, started: 2, finished: 3,
+      reason: "Choose the USB port of the board." });
+    const view = mount(InstallerView);
+    await flush();
+    await toDone(view);
+    await view.find("#install-form").trigger("submit");
+    await flush();
+    expect(view.find("#progress-detail").text()).toBe("Choose the USB port of the board.");
+    expect(view.find("#install-retry").exists()).toBe(true);
+  });
   it("follows the screen onto the network, and after three minutes without it offers the fix", async () => {
     vi.useFakeTimers({ shouldAdvanceTime: true });
     try {
-      const { calls, inventory } = addon({ file: "hall.yaml", action: "install", state: "success", stage: "upload" });
+      const { calls, inventory } = addon({ id: 2, by: "install", file: "hall.yaml", action: "install", state: "success", asked: 1, started: 2, finished: 3 });
       const view = mount(InstallerView);
       await flush();
       await toDone(view);

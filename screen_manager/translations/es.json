@@ -586,6 +586,43 @@
     },
     "plugin": {
       "missing": "Falta el plugin"
+    },
+    "calendar": {
+      "free": "Libre",
+      "busy": "Ocupado",
+      "starts_soon": "Empieza pronto",
+      "private": "Ocupado",
+      "all_day": "Todo el día",
+      "today": "Hoy",
+      "tomorrow": "Mañana",
+      "nothing": "Nada previsto",
+      "nothing_more": "Nada más esta semana",
+      "until": "Hasta las {x}",
+      "next": "Próximo {x}",
+      "left": "Quedan {x}",
+      "in": "En {x}",
+      "more": "{x} más",
+      "earlier": "{x} antes",
+      "later": "{x} después",
+      "more_week": "{x} más esta semana",
+      "days_view": "{x} días",
+      "views": [
+        "Próximos",
+        "Día",
+        "Semana",
+        "Mes"
+      ],
+      "view_notes": [
+        "Lo que ocurre ahora y lo siguiente",
+        "Un día, toca la franja para elegirlo",
+        "Días uno junto a otro, horas hacia abajo",
+        "El mes de un vistazo, toca para abrir un día"
+      ],
+      "today_key": "Hoy",
+      "booking": "Reservando…",
+      "calendars": "Calendarios",
+      "also": "+{x} ahora",
+      "booked": "Reservado en la pantalla"
     }
   },
   "addon": {
@@ -707,6 +744,7 @@
         "no_small_slider": "{name} no tiene en Home Assistant nada que un control deslizante pequeño pueda cambiar.",
         "no_graph": "{name} no tiene valores numéricos para dibujar un gráfico.",
         "no_forecast": "{name} no tiene previsión diaria en Home Assistant.",
+        "no_meter": "{name} no tiene valores numéricos para mostrar en un medidor.",
         "no_control": "Home Assistant no ofrece ese control directo para {name}."
       },
       "alerts": {
@@ -755,7 +793,8 @@
         "build_first": "Compila antes el firmware; la descarga aparece cuando termina la compilación.",
         "unknown_action": "Acción de firmware desconocida.",
         "host": "Introduce la dirección IP o el nombre de host de la pantalla que corresponda.",
-        "grid": "Elige una cuadrícula que esta pantalla admita."
+        "grid": "Elige una cuadrícula que esta pantalla admita.",
+        "build_gone": "Esta compilación ya no se conoce. Las más recientes están en Firmware y USB."
       },
       "updates": {
         "automatic": "Elige si activar o desactivar las actualizaciones automáticas.",
@@ -767,7 +806,9 @@
         "no_profile": "No se ha encontrado ningún perfil de ESPHome para esta pantalla. Revisa el nombre en la carpeta de ESPHome.",
         "ip_unknown": "Dirección IP desconocida. Introdúcela una vez; después, el firmware nuevo la comunica por sí mismo.",
         "all_updated": "Todas las pantallas accesibles ya están actualizadas.",
-        "reinstall_dev": "Reinstalar el mismo firmware solo es posible en el canal dev."
+        "reinstall_dev": "Reinstalar el mismo firmware solo es posible en el canal dev.",
+        "all_on_the_way": "Todas las pantallas con una actualización ya la tienen en camino.",
+        "nothing_to_reinstall": "Ahora no se puede reinstalar ninguna pantalla: cada una está desconectada, ya en camino o no tiene perfil en esta app."
       },
       "remove": {
         "not_allowed": "Esta aplicación no puede eliminar una integración de Home Assistant. Elimina la pantalla en el propio Home Assistant, en Configuración → Dispositivos y servicios.",
@@ -870,7 +911,8 @@
       },
       "extras": {
         "request": "Este cambio de un extra no es posible en esta pantalla."
-      }
+      },
+      "display_precision_unregistered": "Home Assistant no guarda ajustes para este sensor porque no tiene un ID único, así que su precisión de visualización solo se puede ajustar en su YAML."
     },
     "status": {
       "first_tiles": "Elige tus primeros mosaicos",
@@ -1466,7 +1508,6 @@
       "refresh": "Recargar",
       "update": {
         "button": "Actualizar",
-        "queued": "En cola para actualizar",
         "available": "Actualización a {version}",
         "no_profile": "No se ha encontrado ningún perfil de ESPHome con este nombre de dispositivo.",
         "whats_new": "Novedades",
@@ -1475,7 +1516,8 @@
         "reinstall": "Reinstalar desde dev",
         "reinstall_why": "Compila de nuevo esta pantalla con el dev más reciente y la instala por Wi-Fi. En dev el número de versión no cambia, así que un dev nuevo nunca se ofrece como actualización.",
         "in_tessera": "Actualiza primero en Tessera",
-        "in_tessera_why": "Actualiza primero esta pantalla aquí en Tessera. Aún tiene la distribución de flash de su primera instalación y el firmware actual ya no cabe, así que ESPHome Device Builder no puede actualizarla. Tessera la pasa por el camino a la nueva distribución y conserva sus ajustes. Después, sirven las dos vías."
+        "in_tessera_why": "Actualiza primero esta pantalla aquí en Tessera. Aún tiene la distribución de flash de su primera instalación y el firmware actual ya no cabe, así que ESPHome Device Builder no puede actualizarla. Tessera la pasa por el camino a la nueva distribución y conserva sus ajustes. Después, sirven las dos vías.",
+        "reinstall_short": "Compila la dev más reciente y la instala por Wi-Fi."
       },
       "host": {
         "hint": "La dirección IP, solo esta vez; el firmware nuevo la comunica por sí mismo.",
@@ -1516,7 +1558,8 @@
         "done": "{name} se ha eliminado.",
         "kept": "{name} se ha eliminado. Su perfil {file} sigue en la carpeta ESPHome."
       },
-      "home": "Resumen de tus pantallas"
+      "home": "Resumen de tus pantallas",
+      "dev_chip": "Esta es la versión dev de la app: cada pantalla que compila viene de la rama dev."
     },
     "palette": {
       "groups": {
@@ -1674,6 +1717,8 @@
         "add": "Haz clic en un hueco vacío y luego en algo de la biblioteca. O arrástralo a la página.",
         "move_label": "Mover",
         "move": "Arrastra un mosaico. Suéltalo en la página siguiente para una página nueva.",
+        "copy_label": "Copiar",
+        "copy": "Mantén {mod} o Mayús y haz clic en los mosaicos, o arrastra un recuadro desde al lado. {copy} y luego {paste} en otra página o pantalla.",
         "pages_label": "Páginas",
         "pages": "Arrastra una página por su número. Lo demás está en su menú ···.",
         "map_label": "Mapa",
@@ -1681,7 +1726,8 @@
         "preview_label": "Vista previa",
         "preview": "Prueba a deslizar y los mosaicos de página. En casa no se activa nada."
       },
-      "copy_needs_migration": "Abre una vez la pantalla de origen para que su diseño pase a páginas y luego cópialo."
+      "copy_needs_migration": "Abre una vez la pantalla de origen para que su diseño pase a páginas y luego cópialo.",
+      "removed_several": "Se eliminó 1 mosaico | Se eliminaron {n} mosaicos"
     },
     "page": {
       "label": "Página {page}",
@@ -1726,7 +1772,8 @@
         "screen": "Pantalla",
         "alarm_control_panel": "Alarma",
         "lock": "Cerraduras",
-        "humidifier": "Humidificadores"
+        "humidifier": "Humidificadores",
+        "calendar": "Calendarios"
       },
       "room": "Habitación",
       "hide_placed": "Ocultar añadidas",
@@ -2149,13 +2196,15 @@
       "entity": "Entidad",
       "alarm_control_panel": "Panel de alarma",
       "lock": "Cerradura",
-      "humidifier": "Humidificador"
+      "humidifier": "Humidificador",
+      "calendar": "Calendario"
     },
     "displays": {
       "standard": "estándar",
       "watch": "valor grande",
       "forecast": "previsión del tiempo",
       "graph": "gráfico",
+      "meter": "medidor",
       "digital": "reloj digital",
       "analog": "reloj analógico",
       "dial": "esfera sencilla",
@@ -2195,6 +2244,7 @@
         "watch": "Valor grande",
         "forecast": "Previsión del tiempo",
         "graph": "Gráfico",
+        "meter": "Medidor",
         "sunpath": "Recorrido del sol",
         "live": "Imagen en vivo",
         "live_needs_firmware": "Una imagen en vivo necesita el firmware 0.2.77 o más reciente: pulsa Actualizar en la pantalla después de guardar.",
@@ -2208,6 +2258,8 @@
         "map_needs_firmware": "Un mapa necesita el firmware 0.20.0 o posterior: pulsa Actualizar en la pantalla después de guardar.",
         "no_graph": "Home Assistant no tiene valores numéricos para esta entidad, así que el gráfico queda vacío. Elige otra presentación.",
         "no_forecast": "Este servicio meteorológico no tiene previsión diaria en Home Assistant. Elige otra presentación.",
+        "no_meter": "Home Assistant no tiene valores numéricos para esta entidad, así que el medidor queda vacío. Elige otra presentación.",
+        "meter_needs_firmware": "Un medidor necesita el firmware 0.56.0 o posterior: pulsa Actualizar en la pantalla después de guardar.",
         "tall_cover_hint": "",
         "face_needs_firmware": "Este reloj necesita el firmware 0.3.6 o posterior: pulsa Actualizar en la pantalla después de guardar. Hasta entonces la pantalla muestra el reloj digital.",
         "map_tile_needs_firmware": "El mosaico de mapa necesita el firmware 0.21.0 o posterior: pulsa Actualizar en la pantalla después de guardar.",
@@ -2404,7 +2456,144 @@
           "dots": "Puntos en movimiento",
           "lines": "Líneas y flechas"
         }
+      },
+      "calendar": {
+        "title": "Calendario",
+        "needs_firmware": "La tarjeta de calendario necesita el firmware 0.56.0 o posterior: tras guardar, pulsa Actualizar en la pantalla.",
+        "show": {
+          "label": "Mostrar",
+          "events": "Eventos",
+          "events_hint": "Títulos, lo que viene, la semana y el mes",
+          "busy_free": "Libre u ocupado",
+          "busy_free_hint": "Libre, Empieza pronto u Ocupado en letra grande, la próxima reserva y cuánto dura",
+          "room": "Estado y reserva",
+          "room_hint": "Libre u Ocupado en grande, en verde o rojo, hasta cuándo, y botones que reservan la sala ahora"
+        },
+        "calendars": {
+          "label": "Calendarios",
+          "hint": "Hasta {n} calendarios en una tarjeta, cada uno con su propio color de Home Assistant.",
+          "count": "{n} calendario | {n} calendarios",
+          "own": "Este mosaico",
+          "none": "Home Assistant no tiene otros calendarios."
+        },
+        "filter": {
+          "title": "Qué eventos",
+          "found": "{n} evento | {n} eventos"
+        },
+        "places": {
+          "label": "Lugar",
+          "hint": "Solo eventos en estos lugares, p. ej. una sala de reuniones. Los lugares salen de los propios eventos de los calendarios; escribe otro para añadirlo.",
+          "add": "Añadir un lugar"
+        },
+        "words": {
+          "label": "Palabras del título",
+          "hint": "Solo eventos con una de estas palabras en el título, y ninguno con una de las palabras que se omiten.",
+          "only": "Solo con",
+          "hide": "Omitir",
+          "add": "Añadir una palabra"
+        },
+        "all_day": "Eventos de todo el día",
+        "tentative": "Eventos provisionales",
+        "tentative_hint": "Eventos aún sin confirmar, tal como los marca el calendario.",
+        "private": "Ocultar títulos",
+        "private_hint": "Cada evento aparece como Ocupado, sin título ni lugar: para una pantalla en un pasillo o una sala compartida.",
+        "time": {
+          "title": "Tiempo"
+        },
+        "ahead": "Días por delante",
+        "ahead_hint": "Cuántos días de eventos muestra la tarjeta a partir de hoy.",
+        "days": "{n} día | {n} días",
+        "soon": "Empieza pronto",
+        "soon_hint": "Cuánto antes de un evento la tarjeta dice Empieza pronto.",
+        "soon_off": "Desactivado",
+        "minutes": "{n} min | {n} min",
+        "start_view": "La pantalla completa abre en",
+        "start_view_hint": "Un toque en la tarjeta abre su pantalla completa. Automático muestra la semana si la pantalla tiene sitio para ella, si no, el día.",
+        "view": {
+          "auto": "Automático",
+          "up_next": "Próximos",
+          "day": "Día",
+          "week": "Semana",
+          "month": "Mes"
+        },
+        "week_start": "La semana empieza",
+        "week_start_hint": "Hoy mantiene a la vista los próximos días; lunes muestra la semana del calendario.",
+        "week_start_today": "Hoy",
+        "week_start_monday": "Lunes",
+        "hours": "Horas",
+        "hours_hint": "Las horas que muestra la semana. Automático sigue los eventos, al menos de ocho a ocho; lo que queda fuera se cuenta.",
+        "hours_auto": "Automático",
+        "week_numbers": "Números de semana",
+        "week_numbers_hint": "En el mes, a la izquierda de cada semana.",
+        "book": {
+          "title": "Reserva",
+          "on": "Reservar en",
+          "on_hint": "El calendario donde va una reserva hecha en la pantalla. Solo calendarios que aceptan eventos nuevos de Home Assistant, como Local Calendar, Google y CalDAV.",
+          "none": "Ninguno de los calendarios de esta tarjeta acepta eventos nuevos de Home Assistant, así que la tarjeta no muestra botones de reserva.",
+          "place": "Lugar",
+          "place_hint": "Se escribe como lugar de la reserva, por ejemplo el nombre de la sala.",
+          "place_add": "Añadir un lugar",
+          "name": "Título",
+          "name_hint": "El título de la reserva en el calendario.",
+          "name_placeholder": "Reservado en la pantalla"
+        }
+      },
+      "meter": {
+        "title": "Medidor",
+        "look": "Forma",
+        "styles": {
+          "ring": "Anillo",
+          "tape": "Regla",
+          "bar": "Barra"
+        },
+        "range": "Rango",
+        "range_hint": "Dónde empieza y termina el medidor. Desde Home Assistant, un sensor va de 0 a 100, como en su tarjeta de indicador; define uno propio para una temperatura, el CO2 o la potencia.",
+        "range_ha": "De Home Assistant",
+        "range_own": "Propio",
+        "min": "Mín",
+        "max": "Máx",
+        "outside": "{value} está fuera de {min} – {max}.",
+        "set_own": "Define el rango tú mismo",
+        "range_wrong": "El mínimo debe ser menor que el máximo.",
+        "color": "Color",
+        "segments": "Segmentos",
+        "segments_hint": "Un color para todo el medidor, o dos o tres que cambian en un umbral. Un umbral es un valor en la unidad del propio sensor.",
+        "whole": "todo el medidor",
+        "up_to": "hasta",
+        "above": "por encima",
+        "swatch_aria": "Color del segmento {n}: {color}",
+        "own_color": "El color propio del mosaico",
+        "threshold_aria": "Umbral {n}",
+        "thresholds_wrong": "Cada umbral debe ser mayor que el anterior.",
+        "reset": "Restablecer",
+        "colors": {
+          "red": "Rojo",
+          "pink": "Rosa",
+          "purple": "Morado",
+          "deep-purple": "Morado oscuro",
+          "indigo": "Índigo",
+          "blue": "Azul",
+          "light-blue": "Azul claro",
+          "cyan": "Cian",
+          "teal": "Verde azulado",
+          "green": "Verde",
+          "light-green": "Verde claro",
+          "lime": "Lima",
+          "yellow": "Amarillo",
+          "amber": "Ámbar",
+          "orange": "Naranja",
+          "deep-orange": "Naranja oscuro",
+          "brown": "Marrón",
+          "grey": "Gris",
+          "blue-grey": "Gris azulado"
+        }
       }
+    },
+    "precision": {
+      "label": "Precisión de visualización",
+      "default": "Predeterminado ({value})",
+      "note": "Es el ajuste propio de Home Assistant para este sensor, así que también cambia allí.",
+      "unregistered": "Este sensor no tiene un ID único, así que Home Assistant no guarda ajustes para él."
     },
     "tile_card": {
       "label": "{name}, hueco {slot} de la página {page}. Enter: configurar; teclas de flecha: mover",
@@ -2668,7 +2857,11 @@
         "all": "Actualizar 1 pantalla | Actualizar las {n} pantallas",
         "whats_new": "Novedades del firmware {version}",
         "auto_label": "Actualizar automáticamente cada noche",
-        "auto_hint": "Entre las 03:00 y las 06:00, una pantalla cada vez. Se detiene si hay un error y lo notifica en Home Assistant."
+        "auto_hint": "Entre las 03:00 y las 06:00, una pantalla cada vez. Se detiene si hay un error y lo notifica en Home Assistant.",
+        "reinstall_all": "Reinstalar 1 pantalla desde dev | Reinstalar las {n} pantallas desde dev",
+        "reinstall_all_hint": "Compila la dev más reciente para cada pantalla, una tras otra, y la instala por Wi-Fi. En dev el número de versión no cambia, así que una dev nueva nunca se ofrece como actualización.",
+        "reinstall_all_confirm": "¿Reinstalar 1 pantalla desde la dev más reciente? Se reinicia cuando tenga el firmware. | ¿Reinstalar {n} pantallas desde la dev más reciente? Se compilan una tras otra y cada una se reinicia cuando tiene su firmware.",
+        "reinstall_all_go": "Reinstalar"
       },
       "claude": {
         "installed": "Habilidad instalada. Claude Code la detecta al momento.",
@@ -2735,7 +2928,8 @@
       "download_target": "Descargar el archivo y flashearlo tú mismo",
       "host": "Dirección IP o nombre de host",
       "download_file": "Descargar {name}",
-      "download_how": "Instálalo en la pantalla con {esphome_web} en Chrome o Edge: Connect, elige el puerto USB de la pantalla, Install y selecciona este archivo. Contiene tu contraseña de Wi-Fi y las claves de la pantalla: no lo compartas."
+      "download_how": "Instálalo en la pantalla con {esphome_web} en Chrome o Edge: Connect, elige el puerto USB de la pantalla, Install y selecciona este archivo. Contiene tu contraseña de Wi-Fi y las claves de la pantalla: no lo compartas.",
+      "waiting": "esperando su turno, 1 compilación antes | esperando su turno, {n} compilaciones antes"
     },
     "installer": {
       "board": "¿Qué pantalla tienes?",
@@ -2795,7 +2989,6 @@
       },
       "install": "Instalar",
       "save_profile": "Guardar perfil",
-      "busy": "Ya hay una compilación o instalación en curso ({file}). Espera a que termine.",
       "no_cli": "A esta instalación le falta la CLI de ESPHome; solo se puede guardar el perfil.",
       "progress": {
         "saved": "{file} está en la carpeta de ESPHome",
@@ -2804,7 +2997,8 @@
         "ready": "El firmware para {name} está listo",
         "installed": "El firmware ya está en {name}",
         "build_failed": "Error en la compilación",
-        "install_failed": "Error en la instalación"
+        "install_failed": "Error en la instalación",
+        "waiting": "Esperando su turno…"
       },
       "detail": {
         "saved": "Instálalo más tarde desde Firmware y USB: elige este perfil y luego el puerto USB del equipo de Home Assistant, o Descargar para instalar el firmware en la pantalla desde tu propio ordenador. Guarda la clave API para el emparejamiento:",
@@ -2814,7 +3008,9 @@
         "downloaded": "Instálalo en la pantalla desde tu propio ordenador. Aparece aquí en cuanto esté en tu Wi-Fi.",
         "booted": "La pantalla arranca, se conecta a tu Wi-Fi y se une a Home Assistant por sí sola.",
         "booted_calibrate": "La pantalla arranca y se conecta a tu Wi-Fi. Primero pide una calibración táctil: toca las cruces. Después se une a Home Assistant por sí sola.",
-        "see_log": "Consulta el registro de abajo."
+        "see_log": "Consulta el registro de abajo.",
+        "waiting": "Antes va 1 compilación. Esta empieza sola justo después, y puedes salir de esta página. | Antes van {n} compilaciones. Esta empieza sola justo después, y puedes salir de esta página.",
+        "waiting_browser": "Antes va 1 compilación. Esta empieza sola justo después. Deja esta página abierta: escribe la pantalla en cuanto su firmware esté compilado. | Antes van {n} compilaciones. Esta empieza sola justo después. Deja esta página abierta: escribe la pantalla en cuanto su firmware esté compilado."
       },
       "download_steps": {
         "plug": "{bold} con un cable USB de datos.",
@@ -2913,7 +3109,8 @@
       "pair_yourself": "Añadirla tú mismo en Home Assistant",
       "grid": "Cuadrícula",
       "grid_hint": "La cuadrícula propuesta es la mejor para esta pantalla. Puedes cambiarla, y su orientación, más tarde junto a las páginas en el editor, sin volver a compilar.",
-      "grid_best": "Volver a la mejor"
+      "grid_best": "Volver a la mejor",
+      "waits_turn": "Ahora se está compilando otra pantalla. Esta espera su turno y empieza sola justo después."
     },
     "alerts": {
       "eyebrow": "Alertas · guía rápida",
@@ -3105,11 +3302,13 @@
       "confirm_example": "¿Sustituir el texto actual por el ejemplo?",
       "example_loaded": "Ejemplo cargado. Guárdalo cuando estés listo.",
       "confirm_clear": "¿Vaciar el YAML personalizado local?",
-      "cleared": "El YAML personalizado quedará vacío cuando guardes."
+      "cleared": "El YAML personalizado quedará vacío cuando guardes.",
+      "checking_waits": "Esperando a la compilación en curso, luego se comprueba…"
     },
     "mockup": {
       "home": "Casa",
-      "unknown": "Desconocido"
+      "unknown": "Desconocido",
+      "calendar_free": "Libre"
     },
     "pages": {
       "mode": "Modo del editor",
@@ -3149,6 +3348,8 @@
       "arrange": "Ordenar desde Inicio",
       "zoom_out": "Alejar",
       "zoom_in": "Acercar",
+      "zoom": "Tamaño de las páginas",
+      "zoom_reset": "Volver al 100 %",
       "choose_destination": "Elige la página de destino.",
       "move_map": "Mover {name} en el mapa",
       "change_destination": "Cambiar el destino de una tarjeta de navegación en {name}",
@@ -3424,6 +3625,7 @@
       "reset": "Volver a {name}"
     },
     "phone": {
+      "menu": "Menú",
       "screens": "Pantallas",
       "add_tile": "Añadir mosaico",
       "add_to_cell": "Va en el lugar {cell} de {page}",
@@ -3458,12 +3660,12 @@
       "failed": "La última compilación de {screen} falló. El registro dice por qué.",
       "title": "Compilando ahora",
       "count": "1 compilación en curso | {n} compilaciones en curso",
-      "waiting": "Esperando su turno",
       "ready": "{name} está listo",
       "ready_several": "{names} están listos",
       "update_failed": "No se pudo actualizar {name}",
       "build_failed": "No se pudo compilar {name}",
-      "show_log": "Ver registro"
+      "show_log": "Ver registro",
+      "waiting_place": "Esperando su turno, 1 compilación antes | Esperando su turno, {n} compilaciones antes"
     },
     "grid": {
       "title": "Cuadrícula",
@@ -3482,6 +3684,22 @@
       "landscape": "Horizontal",
       "portrait": "Vertical",
       "turn_hint": "Al girar, la pantalla se reinicia una vez para medir su nueva imagen."
+    },
+    "clipboard": {
+      "copied": "1 mosaico copiado. Pégalo con {key} en cualquier página o pantalla | {n} mosaicos copiados. Pégalos con {key} en cualquier página o pantalla",
+      "cut": "1 mosaico cortado | {n} mosaicos cortados",
+      "pasted": "1 mosaico pegado | {n} mosaicos pegados",
+      "pasted_pages": "{n} mosaicos pegados, el resto en una página nueva | {n} mosaicos pegados, el resto en {pages} páginas nuevas",
+      "pasted_some": "{n} de {total} mosaicos pegados. Esta pantalla no tiene sitio para los demás",
+      "none_fit": "No se pegó nada. Esta pantalla no tiene sitio para estos mosaicos",
+      "empty": "Aún no se ha copiado nada"
+    },
+    "selection": {
+      "title": "1 mosaico | {n} mosaicos",
+      "leave": "Quitar {name} de la selección",
+      "copy": "Copiar",
+      "hint": "{copy} copia los mosaicos con todos sus ajustes. Elige una página o una celda, aquí o en otra pantalla, y pulsa {paste}.",
+      "remove": "Eliminar mosaico | Eliminar {n} mosaicos"
     }
   }
 }

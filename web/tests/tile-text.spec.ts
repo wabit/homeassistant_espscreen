@@ -1,7 +1,7 @@
 // What a card on the mockup writes (model/tile-text.ts): the line under its name, the second line, the values a large card
 // stands tall, and the firmware's number rules it ports (tests/test_editor_parity.py runs those against the C++ too).
 import { describe, expect, it } from "vitest";
-import { bigKeyLine, bigValue, bodyText, decimalText, favoriteLine, fillPercent, haWord, headLine, humidityText, isOn, pageLink, rangeChip,
+import { bigKeyLine, bigValue, bodyText, decimalText, favoriteLine, fillPercent, haWord, headLine, humidityText, isOn, ownWords, pageLink, rangeChip,
   readingText, roundValue, runText, sameLive, setpointText, stateText, subLine, temperatureText, unitSuffix, type ScreenWords } from "../src/model/tile-text";
 
 const en: ScreenWords = { locale: "en", marks: { decimal: ".", group: ",", from: 4 } };
@@ -91,6 +91,13 @@ describe("the values a card stands large", () => {
     expect(roundValue("light", climate("on", {}), en)).toBe("");
   });
 
+  it("writes a duration in the words the add-on sends, its units in them (durations.py)", () => {
+    const left = { state: "0.2", a: { device_class: "duration", unit_of_measurement: "h" }, word: "12m" };
+    expect([bigValue("sensor", left, en), stateText("sensor.left", left, {}, en), ownWords("sensor", left)]).toEqual(["12m", "12m", "12m"]);
+    // A state that is not a number keeps Home Assistant's word for it.
+    expect(ownWords("sensor", { ...left, state: "unknown" })).toBe("");
+  });
+
   it("fills a slider with what the entity reports, a blind with its closed part", () => {
     expect(fillPercent("light", climate("on", { brightness: 128 }))).toBe(50);
     expect(fillPercent("light", climate("off", { brightness: 128 }))).toBe(0);
@@ -144,5 +151,13 @@ describe("the values a card stands large", () => {
     expect(sameLive({ state: "on", a: {} }, { state: "on", a: {} })).toBe(true);
     expect(sameLive({ state: "on", a }, { state: "on", a: { brightness: 1 } })).toBe(false);
     expect(sameLive({ state: "on", a: {} }, { state: "off", a: {} })).toBe(false);
+  });
+});
+
+describe("a calendar's line (firmware 0.56.0)", () => {
+  it("names the event of the moment and says Free while none runs", () => {
+    expect(stateText("calendar.work", { state: "on", a: { message: "Stand-up" } }, {}, en)).toBe("Stand-up");
+    expect(stateText("calendar.work", { state: "off", a: { message: "Lunch" } }, {}, en)).toBe("Free");
+    expect(stateText("calendar.work", { state: "unavailable" }, {}, en)).toBe("Unavailable");
   });
 });

@@ -6,6 +6,8 @@
 - [TROUBLESHOOTING.md](TROUBLESHOOTING.md): what to check when a screen, its touch or its way into Home Assistant misbehaves.
 - [DOCKER.md](DOCKER.md): Tessera Screen Manager on Home Assistant Container, without the App store.
 - [BEDSIDE.md](BEDSIDE.md): the bedside clock, a whole-page clock with keys for the night.
+- [CALENDAR.md](CALENDAR.md): the calendar card, from what is on now to the week and the month, and its filters.
+- [METER.md](METER.md): the meter display of a sensor, a ring, a tape or a bar, its range and its colours.
 - [SCREENSAVER.md](SCREENSAVER.md): what a screen shows in standby instead of its dimmed tiles: a cover, a camera or the clock.
 - [BATTERY.md](BATTERY.md): a screen's battery in its top bar, and how a board or your own YAML measures it (also a
   recipe for the code).
@@ -51,6 +53,8 @@
   way every control does it.
 - [CARD_PARTS.md](CARD_PARTS.md): a card built once and painted in place when a value changes, instead of built again.
 - [PLUGINS.md](PLUGINS.md): plugins on the core's side: the plugin API, a plugin tile end to end, the plugins file, fetch.
+- [BUILDS.md](BUILDS.md): the one line every build waits in (updates, plugins, New screen, Firmware & USB), and how a
+  build is followed.
 - [TILE_MEMORY.md](TILE_MEMORY.md): how many tiles and pages a board holds, and the memory budget that says how many a
   layout really takes.
 - [FLASH_LAYOUT.md](FLASH_LAYOUT.md): the partition table of a board with 4 MB of flash, and how a screen gets it

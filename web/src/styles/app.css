@@ -59,6 +59,8 @@ a:hover { text-decoration: underline; }
 .brand:hover { background: var(--surface-2); }
 .brand .mark { width: 22px; height: 22px; flex: none; }
 .brand .txt { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+/* The dev app says so beside its name (docs/RELEASING.md, "Testing dev"): a small chip in the colour of what waits. */
+.brand .channel-chip { flex: none; padding: 1px 7px; font-size: 10.5px; font-weight: 600; letter-spacing: 0.02em; color: var(--warn); background: var(--warn-soft); border-color: transparent; }
 /* The logo and, beside it, the button that folds the sidebar to its icons: quiet until the sidebar is pointed at. */
 .side-top { display: flex; align-items: center; gap: 2px; }
 .side-top .brand { flex: 1; min-width: 0; }
@@ -82,6 +84,9 @@ a:hover { text-decoration: underline; }
   .side-folded .label-row > span, .side-folded .label-row #refresh, .side-folded .screen-item .name, .side-folded .screen-item .sub,
   .side-folded .screen-item .unsaved, .side-folded .row-end, .side-folded .side .more .nav-item .txt, .side-folded .broken-nav .txt, .side-folded .screen-item .broken-dot { display: none; }
   .side-folded .side-fold { width: 100%; }
+  /* Folded, the chip sits on the mark's corner, as small as it reads. */
+  .side-folded .brand { position: relative; }
+  .side-folded .brand .channel-chip { position: absolute; top: -3px; right: 2px; padding: 0 4px; font-size: 9px; }
   .side-folded .conn { justify-content: center; padding: 4px 0; }
   .side-folded .search-btn, .side-folded .nav-item { justify-content: center; padding: 0; gap: 0; }
   .side-folded .label-row { justify-content: center; padding: 10px 0 4px; }
@@ -279,6 +284,9 @@ a:hover { text-decoration: underline; }
 .broken-nav { color: var(--ink-2); }
 .broken-nav .ui-icon { color: var(--warn); font-size: 16px; width: 18px; text-align: center; }
 .broken-nav .txt { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+/* The dev app's Reinstall from dev, where an update would be: a button and what it does. */
+.screen-dev { display: grid; gap: 4px; justify-items: start; }
+.screen-dev small { color: var(--muted); }
 .screen-broken { display: grid; gap: 2px; }
 .screen-broken-head { font-size: 11.5px; color: var(--warn); }
 .screen-broken .broken-list { margin: 0 -8px; }
@@ -394,6 +402,10 @@ a:hover { text-decoration: underline; }
 .tile { position: relative; background: #fff; border: 1px solid #dcdcdc; border-radius: 12px; padding: 8px 9px; display: flex; flex-direction: column; justify-content: space-between; gap: 4px; min-height: 0; cursor: pointer; text-align: left; overflow: hidden; isolation: isolate; color: #1b1b1b; touch-action: manipulation; }
 .tile:hover { border-color: #b9c4d3; }
 .tile.chosen { outline: 2px solid var(--kind-tile); outline-offset: 1px; }
+/* What can be carried (drag.ts vDrag) is held, not read: a finger held on it selects no text and opens no menu or picture
+   drag of the browser's own, which on Android ended the pointer under a tile being carried. */
+[data-drag] { -webkit-touch-callout: none; -webkit-user-select: none; user-select: none; }
+[data-drag] img { -webkit-user-drag: none; }
 .tile.wide { grid-column: span var(--screen-wide-span, 2); flex-direction: row; align-items: center; gap: 8px; }
 .tile.bare { background: transparent; border-style: dashed; border-color: #c3c9d0; }
 .tile.placeholder { opacity: 0.55; border: 2px dashed var(--accent); background: var(--accent-soft); cursor: default; }
@@ -614,6 +626,34 @@ button.insp-sec-head:hover h3 { color: var(--ink); }
 .favorite-chosen { display: flex; align-items: center; gap: 8px; width: 100%; min-width: 0; }
 .favorite-title { flex: 1; min-width: 0; font-weight: 500; color: var(--ink); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .favorite-chosen .help { flex: 1; }
+/* A calendar card (firmware 0.56.0): what it shows as two cards side by side, its calendars with their own colours, and
+   its places and words as chips that are lit while chosen. */
+.cal-presets { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; width: 100%; }
+.cal-preset:last-child:nth-child(odd) { grid-column: 1 / -1; }
+.cal-preset { display: grid; gap: 4px; align-content: start; padding: 10px 11px; border: 1px solid var(--line-strong); border-radius: 10px; background: var(--surface); text-align: left; transition: border-color 0.12s, background 0.12s; }
+.cal-preset:hover:not([aria-pressed="true"]) { background: var(--surface-2); }
+.cal-preset[aria-pressed="true"] { border-color: var(--accent); background: var(--accent-soft); box-shadow: 0 0 0 1px var(--accent) inset; }
+.cal-preset-head { display: flex; align-items: center; gap: 6px; font-size: 13px; color: var(--ink); }
+.cal-preset-head .ui-icon { font-size: 16px; color: var(--muted); }
+.cal-preset[aria-pressed="true"] .cal-preset-head .ui-icon { color: var(--accent); }
+.cal-preset small { line-height: 1.35; }
+.cal-list { display: grid; gap: 1px; width: 100%; }
+.cal-list .check-row { padding: 6px 8px; }
+.cal-list .cal-own { cursor: default; }
+.cal-list .cal-own:hover { background: var(--accent-soft); }
+.cal-dot { width: 10px; height: 10px; border-radius: 50%; flex: none; background: var(--line-strong); }
+.cal-name { flex: 1; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.cal-list small { flex: none; }
+.cal-words { display: grid; grid-template-columns: auto minmax(0, 1fr); align-items: center; column-gap: 10px; row-gap: 8px; width: 100%; }
+.cal-words-label { font-size: 12px; color: var(--muted); white-space: nowrap; }
+.cal-book-title { width: 100%; font-size: 13.5px; height: 34px; }
+.tag-field { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; width: 100%; }
+.tag-chip { display: inline-flex; align-items: center; gap: 4px; height: 28px; max-width: 100%; padding: 0 10px 0 7px; border-radius: 999px; font-size: 12.5px; font-weight: 500; color: var(--ink-2); background: var(--surface); border: 1px dashed var(--line-strong); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.tag-chip .ui-icon { font-size: 14px; color: var(--muted); flex: none; }
+.tag-chip:hover:not(:disabled) { color: var(--ink); background: var(--surface-2); }
+.tag-chip[aria-pressed="true"] { color: var(--ink); background: var(--accent-soft); border: 1px solid transparent; }
+.tag-chip[aria-pressed="true"] .ui-icon { color: var(--accent); }
+.tag-field .tag-input { flex: 1 1 120px; min-width: 0; height: 28px; padding: 3px 9px; font-size: 12.5px; border-radius: 999px; }
 .gesture-note { display: flex; align-items: flex-start; gap: 7px; font-size: 12px; color: var(--muted); line-height: 1.4; padding-left: 138px; }
 .gesture-note .ui-icon { font-size: 14px; margin-top: 1px; flex: none; }
 /* A longer list of choices: the current one in a field, the list under it. */
@@ -930,22 +970,23 @@ td code { white-space: nowrap; }
 /* Responsive */
 @media (max-width: 960px) {
   .app { grid-template-columns: 1fr; min-height: 100vh; }
-  .side { position: static; height: auto; flex-direction: row; flex-wrap: wrap; align-items: center; border-right: 0; border-bottom: 1px solid var(--line); padding: 10px; gap: 4px 6px; }
-  .side .label, .side .spacer, .conn { display: none; }
+  /* A phone's sidebar is a sheet from the left (.side.sheet below) with everything the wide one has: not this row. */
+  .side:not(.sheet) { position: static; height: auto; flex-direction: row; flex-wrap: wrap; align-items: center; border-right: 0; border-bottom: 1px solid var(--line); padding: 10px; gap: 4px 6px; }
+  .side:not(.sheet) .label, .side:not(.sheet) .spacer, .side:not(.sheet) .conn { display: none; }
   .side-fold, .side-resize { display: none; }
   /* On a narrow page the sidebar is a row: New screen and Refresh stay, as buttons among the screens (app 0.4.32). */
-  .side .label.label-row { display: flex; order: 99; padding: 0; }
-  .side .label-row > span { display: none; }
+  .side:not(.sheet) .label.label-row { display: flex; order: 99; padding: 0; }
+  .side:not(.sheet) .label-row > span { display: none; }
   .side .label-row #refresh { opacity: 1; }
-  .row-end { position: static; height: auto; }
-  .details-toggle { display: none; }
-  .screen-item .nav-item, .screen-item.update .nav-item { padding-right: 8px; }
-  .side #screens { display: contents; }
-  .screen-item { display: contents; }
-  .screen-details { display: none; }
-  .side #pending { flex-basis: 100%; }
-  .nav-item { width: auto; }
-  .more { display: contents; }
+  .side:not(.sheet) .row-end { position: static; height: auto; }
+  .side:not(.sheet) .details-toggle { display: none; }
+  .side:not(.sheet) .screen-item .nav-item, .side:not(.sheet) .screen-item.update .nav-item { padding-right: 8px; }
+  .side:not(.sheet) #screens { display: contents; }
+  .side:not(.sheet) .screen-item { display: contents; }
+  .side:not(.sheet) .screen-details { display: none; }
+  .side:not(.sheet) #pending { flex-basis: 100%; }
+  .side:not(.sheet) .nav-item { width: auto; }
+  .side:not(.sheet) .more { display: contents; }
   .main-head { grid-template-columns: minmax(0, 1fr) auto; padding: 10px 14px; gap: 8px; position: static; }
   .main-head .tabs { grid-column: 1 / -1; grid-row: 2; justify-self: start; }
   .head-right { grid-column: 2; grid-row: 1; }
@@ -1315,10 +1356,21 @@ section.advanced code { font-size: 11.5px; }
    keeps every pixel it had. Text fields stay at 16px: a smaller one makes iOS zoom the page on focus. */
 .app.phone { grid-template-columns: minmax(0, 1fr); height: auto; min-height: 100vh; background: var(--ground); }
 .app.phone .side-fold, .app.phone .side-resize { display: none; }
+/* The sidebar of a phone (stores/ui.ts sideOpen): the whole sidebar of a wider page, as a sheet from the left over a dimmed
+   page, opened with the menu key of the overview, a screen and every other page. */
+.app.phone .side.sheet { position: fixed; inset: 0 auto 0 0; width: min(320px, 86vw); height: 100%; z-index: 41; border-right: 1px solid var(--line);
+  box-shadow: var(--shadow); transform: translateX(-102%); visibility: hidden; transition: transform 0.24s cubic-bezier(0.2, 0.8, 0.2, 1), visibility 0s 0.24s; }
+.app.phone .side.sheet.open { transform: none; visibility: visible; transition: transform 0.24s cubic-bezier(0.2, 0.8, 0.2, 1); }
+.side-dim { animation: side-dim-in 0.2s ease-out; }
+@keyframes side-dim-in { from { opacity: 0; } }
+.phone-menu-key { width: 36px; height: 36px; color: var(--ink); font-size: 22px; }
+.phone-nav { display: flex; align-items: center; gap: 6px; padding: 6px 8px; border-bottom: 1px solid var(--line); background: var(--surface); }
+.phone-nav b { font-size: 15px; font-weight: 650; }
 .app.phone input:not([type="checkbox"]):not([type="radio"]):not([type="range"]), .app.phone textarea, .app.phone select { font-size: 16px; }
 .app.phone .main-head { position: static; display: grid; grid-template-columns: minmax(0, 1fr) auto; grid-template-areas: "back more" "title title"; gap: 2px 8px; min-height: 0;
   padding: 6px 12px 6px 8px; border-bottom: 0; background: transparent; }
-.app.phone .phone-back { grid-area: back; justify-self: start; display: inline-flex; align-items: center; height: 36px; padding-right: 6px; color: var(--accent); font-size: 15.5px; }
+.app.phone .phone-lead { grid-area: back; justify-self: start; display: flex; align-items: center; gap: 0; }
+.app.phone .phone-back { justify-self: start; display: inline-flex; align-items: center; height: 36px; padding-right: 6px; color: var(--accent); font-size: 15.5px; }
 .app.phone .phone-back .ui-icon { font-size: 24px; }
 .app.phone .head-right { grid-area: more; }
 .app.phone #more { width: 34px; height: 34px; border-radius: 50%; background: var(--seg); color: var(--ink); }
@@ -1333,6 +1385,7 @@ section.advanced code { font-size: 11.5px; }
 .app.phone .canvas { padding: 10px 16px calc(112px + env(safe-area-inset-bottom)); overflow: visible; }
 .app.phone #layout-preview { display: flex; flex-direction: column; align-items: center; gap: 0; overflow: visible; padding: 0; margin: 0; touch-action: pan-y; }
 .app.phone .page-head { display: none; }
+.app.phone #layout-preview .page { flex: none; width: var(--mockup-width); max-width: 100%; }
 .app.phone .tile.just-added, .app.phone .round-tile.just-added { outline: 2.5px solid var(--accent); outline-offset: 2px; box-shadow: 0 0 0 8px color-mix(in srgb, var(--accent) 16%, transparent);
   transition: outline-color 0.4s, box-shadow 0.4s; }
 .phone-pager { display: grid; justify-items: center; gap: 10px; margin-top: 16px; width: 100%; }
@@ -1450,6 +1503,7 @@ section.advanced code { font-size: 11.5px; }
 
 /* The overview of the screens. */
 .app.phone .home-head { position: relative; padding-right: 44px; }
+.app.phone .home-head .phone-menu-key { display: grid; place-items: center; margin: 0 0 4px -8px; }
 .app.phone .home-head h1 { font-size: 27px; font-weight: 700; letter-spacing: -0.02em; }
 .app.phone .home-more { position: absolute; top: 0; right: 0; width: 34px; height: 34px; border-radius: 50%; background: var(--seg); color: var(--ink); }
 @media (prefers-reduced-motion: reduce) { .app.phone .library, .phone-sheet, .app.phone .drawer-enter-active, .app.phone .drawer-leave-active { transition: none; animation: none; } }
@@ -1586,6 +1640,11 @@ section.advanced code { font-size: 11.5px; }
 .build-note .ui-icon { font-size: 16px; }
 .plugin-builds { display: grid; gap: 8px; }
 .updates .build-log { padding: 0; border: 0; background: none; }
+/* Its one column is the card's width, never the button's: a long label (Reinstall all 4 screens from dev) wraps inside the
+   card instead of pushing the button and the line under it out of it. */
+.updates .dev-tools { display: grid; grid-template-columns: minmax(0, 1fr); gap: 4px; justify-items: start; }
+.updates .dev-tools .btn { max-width: 100%; white-space: normal; text-align: left; }
+.updates .dev-tools small { color: var(--muted); }
 /* Update all on this screen: one build for every update, above the screen's own plugins. */
 .sp-updates { display: grid; gap: 10px; justify-items: start; padding: 12px 14px; border-radius: 12px; background: var(--surface); border: 1px solid var(--line); }
 .sp-updates p { font-size: 12.5px; line-height: 1.45; color: var(--ink-2); }
@@ -1691,6 +1750,10 @@ section.advanced code { font-size: 11.5px; }
 .plugin-card:focus-visible { outline: none; box-shadow: var(--focus); }
 .plugin-card.staged { border-color: color-mix(in srgb, var(--accent) 45%, var(--line)); }
 .plugin-card.addable { grid-template-columns: auto minmax(0, 1fr) auto; }
+/* A plugin's picture (store.png, 16:9) across the top of its card, to the card's edges, and large in its details. */
+.plugin-card.pictured { grid-template-rows: auto auto 1fr auto; }
+.plugin-picture { grid-column: 1 / -1; display: block; width: calc(100% + 32px); margin: -16px -16px 2px; aspect-ratio: 16 / 9; object-fit: cover; border-radius: 13px 13px 0 0; background: var(--seg); }
+.pd-picture { display: block; width: 100%; aspect-ratio: 16 / 9; object-fit: cover; margin: 12px 0 4px; border-radius: 12px; border: 1px solid var(--line); background: var(--seg); }
 .plugin-get { align-self: center; width: 32px; height: 32px; border-radius: 999px; display: grid; place-items: center; background: var(--seg); color: var(--accent); font-size: 19px; transition: background 0.15s, color 0.15s, transform 0.12s; }
 .plugin-get:hover { background: var(--accent-soft); }
 .plugin-get:active { transform: scale(0.9); }

@@ -5,7 +5,7 @@ from a web service, hardware on one board, a feature not everyone needs. How to 
 [github.com/MaxGramser/tessera-plugins](https://github.com/MaxGramser/tessera-plugins) (its `docs/` and `AGENTS.md`).
 This page is the core's side: what the firmware, the add-on and the editor do, and the rules a change here keeps.
 
-Plugins are on in every app since 0.4.87 (the plugin API is 0.8 now); before, only in the dev app.
+Plugins are on in every app since 0.4.87 (the plugin API is 0.10 now); before, only in the dev app.
 `core.plugins_enabled()` is the one switch: false takes the Plugins page, its routes and its loops out of the app.
 
 **The API's number.** A plugin builds on every core with the same major and at least its minor. From 1.0 on that is a
@@ -14,7 +14,7 @@ change a name or a signature while the API settles (0.4 renamed `Plugin::on_tick
 plugins move with it in the same release. Such a minor goes into `PLUGIN_API_BREAKS` (`plugin_manifest.py` and
 `__init__.py`, a test keeps them equal): a plugin written before it does not fit a core after it, and its build says so in
 one sentence instead of a compiler error (`api_fits`; the plugins repository's check uses the same rule). A minor that only
-adds is not listed, so a 0.7 plugin builds on 0.8. A test keeps the number equal in `plugin_api.h`, `__init__.py`,
+adds is not listed, so a 0.9 plugin builds on 0.10. A test keeps the number equal in `plugin_api.h`, `__init__.py`,
 `plugin_manifest.py`, this page and the host probe's manifest.
 
 ## The pieces
@@ -22,7 +22,9 @@ adds is not listed, so a 0.7 plugin builds on 0.8. A test keeps the number equal
 | Where | File | What |
 |---|---|---|
 | Firmware | `components/smart_display/plugin_api.h` | What a plugin uses: `tessera::Plugin`, `tessera::Tile`, `TileContext`, the drawing helpers, the clock. The API's version, `PLUGIN_API_MAJOR/MINOR`. |
-| Firmware | `components/smart_display/plugin_host.h`, `plugin_host.cpp` | The core's side: the register, a plugin tile in a card, the moments, the hello. |
+| Firmware | `components/smart_display/roomy.h` | Memory that takes PSRAM first: `roomy::Text`, `roomy::List`, the allocator behind `tessera::Text`, `tessera::List` and the plugin host's documents (below, "Rules a change keeps"). |
+| Firmware | `components/smart_display/plugin_host.h`, `plugin_host.cpp` | The core's side: the register, a plugin tile in a card, its places for pictures, the moments, the hello. |
+| Add-on | `screen_manager/app/plugin_pictures.py` | The pictures of a plugin tile (0.10): the question, where a picture may come from, the cache by address, the atlas. |
 | Firmware | `components/smart_display/__init__.py` | `register_plugin()`, which a plugin's `__init__.py` calls: id, version, tile memory and screen texts from its manifest. `PLUGIN_API`. |
 | Add-on | `screen_manager/app/plugin_manifest.py` | Reads and checks a manifest. Standalone: the plugins repository's `tools/check.py` runs this file. `PLUGIN_API`. |
 | Add-on | `screen_manager/app/plugin_fetch.py` | The building block `fetch`: fill in, ask, map, cache, back off. |
@@ -85,15 +87,16 @@ adds is not listed, so a 0.7 plugin builds on 0.8. A test keeps the number equal
 - Adding or removing (`Plugins.apply`) checks everything first, then writes the plugins file, and only then keeps the
   records and the secrets: a request that is refused, or a file that cannot be written, changes nothing. A screen with a
   profile whose address the app does not know is refused before anything changes (`offline`). Then the screen goes into
-  the queue for its own build and update (`firmware.start`, action install). A plugin update is a build of the whole screen, so it shows as every build
+  the app's one build line for its own build and update (docs/BUILDS.md). A plugin update is a build of the whole screen, so it shows as every build
   does: `Manager.builds` says per screen what is being built for it, whoever asked (`by`: update, plugins or install;
   `state`; ESPHome's `stage`), in the light inventory the editor gets live; the editor's store (`buildOf`,
   `buildProgress`) is the one place every part reads it from, and `BuildLog.vue` shows the progress and the log in the
-  screen's Plugins tab, on the Plugins page and in Settings, Updates. Never track a build in a part of its own. The queue builds one screen at a time, in the order asked, each when the
-  app's build slot is free, so ticking three screens on the Plugins page builds them one after the other. A change asked
-  while the screen's own build runs gets a build of its own after it (`next`): that build may have read the YAML before.
+  screen's Plugins tab, on the Plugins page and in Settings, Updates. Never track a build in a part of its own. The line
+  builds one screen at a time, in the order asked, so ticking three screens on the Plugins page builds them one after
+  the other. A plugin asked while the screen's update waits comes with that update: the two are one build. A change asked
+  while the screen's own build runs gets a build of its own after it: that build may have read the YAML before.
   A screen without a profile in the app gets the file and the line to paste.
-- A build that fails leaves the screen as it was (`_settle_build`): it still runs its last firmware, so its plugins file
+- A build that fails leaves the screen as it was (`_built`, `_settle_build`): it still runs its last firmware, so its plugins file
   goes back to that. A plugin added in it stays listed as failed (with the build's reason) and out of the file until the
   person tries again or takes it off; an update goes back to the version that built (`previous`) and keeps which one
   failed (`failed_update`), which the editor says, offering the update again. So a failed plugin never makes the
@@ -134,6 +137,15 @@ repository's `docs/FETCH.md`.
   `core.plugin_tile()` in the add-on, `TileType::key` and its siblings in the API); the Home Assistant entity a plugin
   tile belongs to is `plugin_entity` (the option, `Extra::plugin_entity`, `TileContext::entity`). The domains a tile, a
   tap action or an input takes are `domains` in the manifest. Keep it so: a new part takes the existing word.
+- **Memory: PSRAM first for what a plugin tile keeps** (`roomy.h`). The boards build with
+  `CONFIG_SPIRAM_USE_CAPS_ALLOC`: a plain `std::string`, `std::vector` or `new` stays in the few tens of kilobytes inside
+  the chip that Wi-Fi and the network stack need, and on a Guition with a few plugin tiles on kept pages a busy moment
+  of Wi-Fi ran it out (2026-10-13: a picture's download aborted, or Wi-Fi stalled). So a plugin tile's options and data
+  (`Extra::plugin_options`, `plugin_state`) are `roomy::Text`, the host parses them with a PSRAM allocator
+  (`json_memory`), `tessera::Tile` and `tessera::Card` take PSRAM in their `operator new` (`tessera::InPsram`), and the
+  API offers `tessera::Text` and `tessera::List` for what a plugin keeps. Keep it so: a new field a plugin tile keeps is a
+  `roomy::Text` or `roomy::List`, a document the host builds or parses gets `json_memory`. Never what DMA or the network
+  reads (a panel's buffer, a socket's): those stay where their driver puts them.
 - **The manifest is the plugin's word, not a fence.** What the add-on enforces is `permissions.network` (every fetch)
   and `permissions.ha_commands` (every question through `tessera::send`). `home_assistant_actions` and
   `read_entities` are declarations the screen does not check: code built into the firmware can do what the firmware
@@ -170,6 +182,11 @@ beside it, read again a few times after a press, so a test can say how it went. 
 | A tile of an entity | `TileContext.entity`, `tessera::action` | the manifest's `domains`, `attributes` and `fields`; `Plugins.entity_part` (state, name, named attributes, fields), `related_entities`; `has_attributes` through `Plugins.entities_with` | entity picker of those domains, also ones Tessera draws no tile for; with `has_attributes` only the entities that have them, and always the one chosen (`offeredEntities`) |
 | A card | `Card`, `add_card`, `open_card`; closed by `hide_detail` | nothing | nothing |
 | A tap action | `add_tap_action`; `event()` runs a tile's `plugin:` tap | `validate_layout` takes a `plugin:` tap | the tile inspector's tap choices |
+| Pictures on a tile (0.10) | `ui::picture` makes a place (a block in `theme::TRACK`) on the card in a call of the tile, `ui::set_picture` names its address and fit, `ui::pictures` says whether the board shows any. The places are the parts of one picture (`tile_picture::Part`, `set_parts`): `tile_ask` hands a plugin card to `plugin_host::picture_ask`, which measures them on the card; the question goes as every tile picture's, with `src` and `fit`; the atlas lands in the store under the tile's key, and `tile_picture_place` hands it to `plugin_host::picture_place`, which lays each place its piece (`lv_image_set_offset`, as the library's covers). The store counts a place's image as a card that draws (`picture_draws`, `picture_let_go`). A board without pictures has the API and no places. | `server.answer_plugin_pictures`: the tile is a plugin tile of the layout, its manifest gives it `pictures`, every address passes `plugin_pictures.allowed` (a host of `permissions.network`, or Home Assistant's own pictures for a tile of an entity); `Pictures.fetch` keeps each by address; `tile_art.encode` paints the frames (fit `fill` or `within`) and a still link serves the BMP | `PluginTile.pictures`; the mockup draws no picture |
+| A label of several lines (0.10) | `ui::text`: a label of the plugin's height, wrapped, ending in dots | nothing | nothing |
+| Where a tap was (0.10) | `tessera::tap_point()`: the finger of the tile's `on_tap` in the tile's own pixels (`finger_at` in the tile's touch handler, made relative to the extra layer by `plugin_host::tap`) | nothing | nothing |
+| The large digits (0.9) | `Font::DIGITS` is `setpoint_digits`, a font every board has, so it costs no flash; `ui::covers()` says whether a value has only its characters (`face_covers`) | nothing | nothing |
+| Tones for a block (0.9) | `Tone::GOOD` (Home Assistant's green) beside ACCENT, BUSY and ALERT; `ui::set_fill` gives a block (a bar, a dot) a tone's colour, `ui::tone_color` the colour itself; one `tone_color` in `plugin_host.cpp` for the bar, labels and blocks | nothing | nothing |
 | A sound of its own (0.8) | `plugin_sound.h` (`tessera::Sound`, `SoundPlayer` on `ts_speaker`); `smart_display.sound()` builds a WAV in | nothing: a plugin that needs the feature `speaker` | nothing |
 | A top bar item | `add_bar_item`, its icon in a `tone` (0.8); `header_bar::Kind::plugin` | `validate_header` type `plugin`, `content` all or icon (wire `o`), sent to a screen whose hello says `plugins` | "From plugins" in Top bar, Add; Show: icon and words, or icon only |
 | Settings rows | `settings(SettingsPage&)`; `settings_screen::plugin_pages` | `Plugins.settings_for`, `set_setting`: the manifest's `settings` (switch, number, select, text, button with its `status`), entities of the screen's own device found in the entity registry (`_setting_entities`) | in the plugin's details on the screen's Plugins tab (`PluginSettings.vue`), with its inputs and parts; Screen settings links there |
@@ -231,7 +248,47 @@ that runs on one of their screens (`plugin_likes.py`): it goes to the Tessera we
 installation, only on a tap and after one yes that it counts in a public number; the plugins repository copies the
 counts into `likes.json` every hour, which the app reads from GitHub.
 
+A plugin can have a picture, `store.png` beside its manifest (the plugins repository's docs/PUBLISHING.md, "The picture
+on the Plugins page", and its `tools/store_image.py`). The index names it (`image`), a link finds it in the plugin's
+folder, a folder plugin has the file. The editor shows it across the top of the plugin's card and above its details,
+through `GET api/plugins/<id>/image` (`plugins.store_image`): the editor's `img-src` is `'self'`, so the app fetches the
+file from GitHub at the plugin's commit, checks it is a PNG of at most 1 MB and 2560 x 1440, keeps one per plugin under
+`data/images`, and serves it under an address named after the commit, which a browser keeps for a day.
+
+## Pictures on a plugin tile
+
+A plugin never fetches: its tile lays out places (`ui::picture`) and names an address for each (`ui::set_picture`), and
+the core takes them the way every picture of the screen comes (docs/CAMERA.md, "A picture per tile"). The places of one
+card are the parts of one picture (`tile_picture.h`, `Part`, `set_parts`): the card asks `esphome.screen_camera` as a
+page of one tile, with an `atlas` of the places' frames from the card's top left, `src` their addresses and `fit`
+(`cover` or `contain`) in the same order; the mark of the key is a digest of the places and addresses, so another
+address, a place that moved, or the other look is another picture, and the same address again costs nothing. The app
+(`server.answer_plugin_pictures`, `plugin_pictures.py`) answers only for a plugin tile of the screen's layout whose
+manifest gives the tile `pictures`, and only addresses the manifest allows: a host of `permissions.network` (as a
+fetch, through the plugins' own session: public hosts, no redirects, 2 MB) or, for a tile of an entity, a picture of
+Home Assistant's own (`/api/image/serve/`, `/api/image_proxy/`, `/local/`, the paths a map marker takes, with the app's
+token). It keeps each picture by address for six hours, paints the frames as it paints every tile picture
+(`tile_art.encode`, `within` is contain on the card's own colour) and serves the atlas as a still link. On the screen
+the atlas is one entry of the store under the tile's key, within the same cap as a camera over the card, and each place
+draws its piece of it (`plugin_host::picture_place`); a frame the app had no picture for stays the card's colour, and
+an answer without a picture is asked for again later, each time after a longer while (`drawn`). A board without
+pictures (no `SCREEN_PICTURES`) has the calls and shows blocks; `ui::pictures()` says so, and a tile lays itself out
+without the places. Nothing of this counts in the layout memory: the store's budget and its rule of the picture used
+longest ago hold for a plugin's atlas as for every picture.
+
+**Layers, turns and reflections.** The places of one card may overlap: they are its layers, and a place made later
+lies over one made earlier. The screen draws them in that order, and the app paints the atlas in the same order
+(`tile_art.layers`): each frame over what the ones before it left, on the card's colour where nothing lies yet, so a
+rounded corner shows the poster under it. Covers of different tiles still never overlap (`tile_art.parse`). A place may
+also ask for its picture turned (`tessera::Turn`, `turn` in the question: `left` faces the left, its left edge far) and
+with a reflection (`mirror`, the lower `MIRROR_PERCENT` of the place under the picture); the app draws both into the
+atlas with Pillow (`tile_art.layer`), so the screen pays nothing for them. The question names `turn` and `mirror` only
+when a place asks for them, and an older app ignores them and draws the pictures flat. A place keeps the picture it
+shows while the next one comes (`set_picture` no longer clears it, and `tile_picture_place` keeps the last atlas while
+the store holds it), so a cover flow turns without a flash of blocks; the render host with `KEPT_PAGES_HOST=1` has a
+picture store of a 4-inch Guition's size, so its renders show every picture of a page as a board with PSRAM does.
+
 ## What is not built yet
 
-A plugin's own messages beyond Home Assistant commands, pictures of a plugin's own, and Python modules of Tessera's own
-plugins in the add-on (the design's `module`).
+A plugin's own messages beyond Home Assistant commands, Python modules of Tessera's own plugins in the add-on (the
+design's `module`), and pictures on a plugin's card over the page (the places exist for tiles only).
