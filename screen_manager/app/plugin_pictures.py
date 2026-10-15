@@ -31,7 +31,9 @@ KEEP_SECONDS = 6 * 3600        # a picture is fetched again after this long (a p
 FAIL_SECONDS = 60              # an address that did not come is not tried again sooner
 # The pictures of Home Assistant's own a tile may show: an entity's `entity_picture` as the map takes a person's
 # (server.HomeAssistant.entity_picture reads exactly these, with the app's own token).
-HA_PICTURES = ('/api/image/serve/', '/api/image_proxy/', '/local/')
+# A media player's cover through Home Assistant's proxy (wabit fork): `/api/media_player_proxy/<player>`, fetched with
+# the app's token like the others, so a plugin tile of a player can show what it plays.
+HA_PICTURES = ('/api/image/serve/', '/api/image_proxy/', '/local/', '/api/media_player_proxy/media_player.')
 
 
 class Question:

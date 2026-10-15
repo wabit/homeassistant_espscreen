@@ -698,7 +698,9 @@ class HomeAssistant:
         root = self.base[:-4] if self.base.endswith('/api') else self.base
         if picture.startswith('/'):
             parsed = urlsplit(picture)
-            if parsed.netloc or not parsed.path.startswith(('/api/image/serve/', '/api/image_proxy/', '/local/')) or '..' in parsed.path:
+            # A player's cover (wabit fork): only the proxy's own address of one player, nothing under it.
+            player = re.fullmatch(r'/api/media_player_proxy/media_player\.[a-z0-9_]+', parsed.path)
+            if parsed.netloc or not (parsed.path.startswith(('/api/image/serve/', '/api/image_proxy/', '/local/')) or player) or '..' in parsed.path:
                 raise ValueError('unsafe picture address')
             url, headers = f'{root}{picture}', {'Authorization': 'Bearer ' + self.token}
         elif picture.startswith(('http://', 'https://')):

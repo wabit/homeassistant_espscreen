@@ -131,6 +131,21 @@ def json_size(value):
     return len(json.dumps(value, separators=(',', ':'), ensure_ascii=False).encode())
 
 
+# An entity's picture is an address, not words (wabit fork): cutting it at 48 bytes, as every text, breaks every
+# picture longer than that, a media player's cover above all. It goes whole up to the 512 a picture's address may have
+# (plugin_pictures), and a player's cover without its `token`, which Home Assistant renews every few minutes: the app
+# fetches it with its own token, and the same cover keeps the same address.
+PICTURE_ATTRIBUTES = frozenset(('entity_picture', 'entity_picture_local'))
+
+def picture_address(value):
+    """An entity_picture as the screen gets it: whole, a player's proxy without its token, '' past 512 bytes."""
+    if value.startswith('/api/media_player_proxy/'):
+        path, _, query = value.partition('?')
+        query = '&'.join(part for part in query.split('&') if part and not part.startswith('token='))
+        value = f'{path}?{query}' if query else path
+    return value if len(value.encode('utf-8')) <= 512 else ''
+
+
 def bounded(value, limit=3200):
     """An answer for a screen within `limit` bytes of JSON: long texts cut to 48 bytes, then lists shortened from the
     end until it fits, each to the same length. A screen's message is at most 4 KB with everything around it. Bytes
@@ -1373,6 +1388,8 @@ class Plugins:
                     continue
             if isinstance(value, bool) or (isinstance(value, (int, float)) and math.isfinite(value)):
                 bounded[name] = value
+            elif isinstance(value, str) and name in PICTURE_ATTRIBUTES:
+                bounded[name] = picture_address(value)
             elif isinstance(value, str):
                 bounded[name] = core.short(value, 48)
             elif isinstance(value, list):
